@@ -1,0 +1,17 @@
+server_host: myngrok.com
+server_port: 4443
+so_timeout: 28800
+ping_time: 10
+tunnel_list:
+  - protocol: http
+    subdomain: www
+    local_host: 127.0.0.1
+    local_port: 9527
+  - protocol: https
+    hostname: www.myngrok.com
+    local_host: 127.0.0.1
+    local_port: 9527
+  - protocol: tcp
+    remote_port: 12345
+    local_host: 127.0.0.1
+    local_port: 9527

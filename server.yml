@@ -1,0 +1,6 @@
+domain: myngrok.com
+port: 4443
+http_port: 80
+https_port: 443
+ssl_crt: server.crt
+ssl_key: server.key

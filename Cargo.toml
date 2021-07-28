@@ -1,0 +1,26 @@
+[package]
+name = "rngrok"
+version = "0.1.0"
+authors = ["refcell <2238932729@qq.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "ngrok"
+path = "src/bin/client.rs"
+
+[[bin]]
+name = "ngrokd"
+path = "src/bin/server.rs"
+
+[dependencies]
+anyhow = "1.0.40"
+serde = { version="1.0.126", features=["derive"] }
+serde_json = "1.0.64"
+serde_yaml = "0.8.17"
+tokio = { version="1.6.0", features=["full"] }
+tokio-rustls = "0.22.0"
+tokio-util = { version="0.6.7", features=["codec"] }
+bytes = "1.0.1"
+rand = "0.8.3"
