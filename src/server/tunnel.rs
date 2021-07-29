@@ -24,7 +24,7 @@ impl TunnelListener {
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
-        let addr = format!("127.0.0.1:{}", self.ctx.port);
+        let addr = format!("0.0.0.0:{}", self.ctx.port);
         let listener = TcpListener::bind(&addr).await?;
         println!("Listening for control and proxy connections on {}", addr);
 
@@ -168,7 +168,7 @@ impl TunnelHandler {
         match req_tunnel.protocol.as_str() {
             protocol @ "tcp" => {
                 let port = req_tunnel.remote_port.unwrap();
-                let addr = format!("127.0.0.1:{}", port);
+                let addr = format!("0.0.0.0:{}", port);
                 let listener = match TcpListener::bind(&addr).await {
                     Ok(t) => t,
                     Err(e) => {

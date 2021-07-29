@@ -6,8 +6,8 @@ use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let listen_addr = String::from("127.0.0.1:80");
-    let server_addr = String::from("127.0.0.1:9527");
+    let listen_addr = String::from("0.0.0.0:80");
+    let server_addr = String::from("0.0.0.0:9527");
 
     println!("Listening on: {}", listen_addr);
     println!("Proxying to: {}", server_addr);

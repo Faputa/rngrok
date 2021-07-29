@@ -6,7 +6,7 @@ use tokio::net::TcpListener;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Bind a server socket
-    let listener = TcpListener::bind("127.0.0.1:17653").await?;
+    let listener = TcpListener::bind("0.0.0.0:17653").await?;
 
     println!("listening on {:?}", listener.local_addr());
 

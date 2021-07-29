@@ -21,7 +21,7 @@ impl HttpListener {
     }
 
     pub async fn run(self, port: u16) {
-        let addr = format!("127.0.0.1:{}", port);
+        let addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&addr).await.unwrap();
         println!("Listening for public http connections on {}", addr);
 
@@ -50,7 +50,7 @@ impl HttpsListener {
     pub async fn run(self, port: u16) {
         let config = self.ctx.ssl_config().unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
-        let addr = format!("127.0.0.1:{}", port);
+        let addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&addr).await.unwrap();
         println!("Listening for public https connections on {}", addr);
 

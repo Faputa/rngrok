@@ -11,7 +11,7 @@ use tokio::time::sleep;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Bind a server socket
-    let socket = TcpStream::connect("127.0.0.1:17653").await?;
+    let socket = TcpStream::connect("0.0.0.0:17653").await?;
     let (_, writer) = socket.into_split();
     let writer = Arc::new(Mutex::new(writer));
 
