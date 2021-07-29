@@ -1,24 +1,17 @@
 use std::sync::Arc;
 
-use tokio::{
-    io::AsyncWriteExt,
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpListener, TcpStream,
-    },
-    sync::broadcast,
-};
+use tokio::{io, net::TcpListener, sync::broadcast};
 
 use crate::{
     msg::{
         AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProxy, ReqTunnel, StartProxy,
     },
     pack::{send_pack, PacketReader},
-    server::tcp::MyTcpListener,
-    util,
+    server::{tcp::MyTcpListener, MyTcpStream},
+    util::{rand_id, timeout},
 };
 
-use super::{Client, Context};
+use super::{Client, Context, TcpReader, TcpWriter};
 
 pub struct TunnelListener {
     ctx: Arc<Context>,
@@ -36,6 +29,7 @@ impl TunnelListener {
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
+            let stream = MyTcpStream::from(stream);
             let handler = TunnelHandler::new(self.ctx.clone());
             tokio::spawn(handler.run_select(stream, notify_shutdown.subscribe()));
         }
@@ -54,7 +48,7 @@ impl TunnelHandler {
         Self { id: None, ctx }
     }
 
-    pub async fn run_select(self, stream: TcpStream, mut shutdown: broadcast::Receiver<()>) {
+    pub async fn run_select(self, stream: MyTcpStream, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
             res = self.run(stream) => {
                 if let Err(e) = res {
@@ -65,7 +59,7 @@ impl TunnelHandler {
         }
     }
 
-    async fn run(mut self, stream: TcpStream) -> anyhow::Result<()> {
+    async fn run(mut self, stream: MyTcpStream) -> anyhow::Result<()> {
         let (mut reader, writer) = stream.into_split();
         let mut packet_reader = PacketReader::new(&mut reader);
 
@@ -92,10 +86,10 @@ impl TunnelHandler {
 
     async fn new_control(
         &mut self,
-        mut reader: PacketReader<'_, OwnedReadHalf>,
-        writer: OwnedWriteHalf,
+        mut reader: PacketReader<'_, TcpReader>,
+        writer: TcpWriter,
     ) -> anyhow::Result<()> {
-        let id = util::rand_id(16);
+        let id = rand_id(16);
         self.id = Some(id.clone());
         let client = Arc::new(Client::new(writer, id.clone()));
         self.ctx
@@ -131,8 +125,8 @@ impl TunnelHandler {
     async fn new_proxy(
         &mut self,
         reg_proxy: RegProxy,
-        mut reader: OwnedReadHalf,
-        mut writer: OwnedWriteHalf,
+        mut reader: TcpReader,
+        mut writer: TcpWriter,
     ) -> anyhow::Result<()> {
         let id = reg_proxy.client_id;
         let client = match self.ctx.client_map.read().unwrap().get(&id) {
@@ -145,7 +139,7 @@ impl TunnelHandler {
 
         let request_receiver = &client.request_receiver;
         let recv_request = async move { request_receiver.lock().await.recv().await };
-        let mut request = match util::timeout(60, recv_request).await {
+        let mut request = match timeout(60, recv_request).await {
             Ok(Some(r)) => r,
             Ok(None) => return Ok(()),
             Err(_) => {
@@ -158,8 +152,7 @@ impl TunnelHandler {
         request.proxy_writer_sender.send(writer).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
-        let _ = tokio::io::copy(&mut reader, &mut request.request_writer).await;
-        let _ = request.request_writer.shutdown().await;
+        let _ = io::copy(&mut reader, &mut request.request_writer).await;
 
         Ok(())
     }
@@ -205,7 +198,7 @@ impl TunnelHandler {
                 } else if let Some(subdomain) = req_tunnel.subdomain {
                     format!("{}://{}.{}", protocol, subdomain, self.ctx.domain)
                 } else {
-                    format!("{}://{}.{}", protocol, util::rand_id(6), self.ctx.domain)
+                    format!("{}://{}.{}", protocol, rand_id(6), self.ctx.domain)
                 };
 
                 self.ctx

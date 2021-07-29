@@ -6,7 +6,7 @@ use crate::{
     client::{proxy::ProxyConnect, Tunnel, TunnelConfig},
     msg::{Auth, AuthResp, Envelope, Message, Ping, ReqTunnel},
     pack::{send_pack, PacketReader},
-    util,
+    util::{rand_id, timeout},
 };
 
 use super::Context;
@@ -27,7 +27,7 @@ impl ControlConnect {
         let mut reader = PacketReader::new(&mut reader);
 
         send_pack(&mut writer, auth()).await?;
-        let json = match util::timeout(self.ctx.so_timeout, reader.read()).await?? {
+        let json = match timeout(self.ctx.so_timeout, reader.read()).await?? {
             Some(s) => s,
             None => return Ok(()),
         };
@@ -46,7 +46,7 @@ impl ControlConnect {
 
         let mut req_id_to_tunnel_config = HashMap::<String, &TunnelConfig>::new();
         for tunnel in &self.ctx.tunnel_list {
-            let req_id = util::rand_id(8);
+            let req_id = rand_id(8);
             let req_tunnel = req_tunnel(tunnel.clone(), req_id.clone());
             send_pack(&mut writer, req_tunnel).await?;
             req_id_to_tunnel_config.insert(req_id, &tunnel);
@@ -54,7 +54,7 @@ impl ControlConnect {
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         loop {
-            let json = match util::timeout(self.ctx.ping_time, reader.read()).await {
+            let json = match timeout(self.ctx.ping_time, reader.read()).await {
                 Ok(Ok(Some(s))) => s,
                 Ok(Ok(None)) => return Ok(()),
                 Ok(Err(e)) => Err(e)?,

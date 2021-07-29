@@ -46,7 +46,7 @@ pub async fn send_pack<W: AsyncWrite + Unpin>(writer: &mut W, msg: String) -> an
     let mut buf = BytesMut::new();
     buf.put_u64_le(msg.len() as u64);
     buf.put(msg);
-    writer.write(&buf).await?;
+    writer.write_all(&buf).await?;
     writer.flush().await?;
     Ok(())
 }

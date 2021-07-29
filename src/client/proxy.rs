@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tokio::{
-    io::AsyncWriteExt,
+    io,
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,
@@ -12,7 +12,7 @@ use tokio::{
 use crate::{
     msg::{Envelope, RegProxy, StartProxy},
     pack::{send_pack, PacketReader},
-    util,
+    util::{send_buf, timeout},
 };
 
 use super::{Context, Tunnel};
@@ -53,7 +53,7 @@ impl ProxyConnect {
         }
 
         let mut packet_reader = PacketReader::new(&mut stream);
-        let json = match util::timeout(self.ctx.so_timeout, packet_reader.read()).await?? {
+        let json = match timeout(self.ctx.so_timeout, packet_reader.read()).await?? {
             Some(s) => s,
             None => return Ok(()),
         };
@@ -81,22 +81,20 @@ impl ProxyConnect {
             Err(e) => {
                 println!("Failed to open private leg {}: {}", tunnel.local_addr, &e);
                 if tunnel.protocol.starts_with("http") {
-                    stream.write(bad_gateway(&tunnel).as_bytes()).await?;
-                    stream.flush().await?;
+                    send_buf(&mut stream, bad_gateway(&tunnel).as_bytes()).await?;
                 }
                 return Ok(());
             }
         };
 
         let (local_reader, mut local_writer) = local_stream.into_split();
-        local_writer.write(&packet_reader.get_buf()).await?;
+        send_buf(&mut local_writer, &packet_reader.get_buf()).await?;
         let (mut reader, writer) = stream.into_split();
 
         let (_notify_shutdown, shutdown) = broadcast::channel::<()>(1);
         tokio::spawn(LocalConnect::new(local_reader, writer).run_select(shutdown));
 
-        let _ = tokio::io::copy(&mut reader, &mut local_writer).await;
-        let _ = local_writer.shutdown().await;
+        let _ = io::copy(&mut reader, &mut local_writer).await;
 
         Ok(())
     }
@@ -120,11 +118,10 @@ impl LocalConnect {
             _ = self.run() => {}
             _ = shutdown.recv() => {}
         }
-        let _ = self.remote_writer.shutdown().await;
     }
 
     async fn run(&mut self) {
-        let _ = tokio::io::copy(&mut self.local_reader, &mut self.remote_writer).await;
+        let _ = io::copy(&mut self.local_reader, &mut self.remote_writer).await;
     }
 }
 

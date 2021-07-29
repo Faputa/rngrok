@@ -7,7 +7,7 @@ use std::{
 use bytes::{BufMut, BytesMut};
 use rand::{distributions::Alphanumeric, Rng};
 use tokio::{
-    io::{AsyncRead, AsyncReadExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     time,
 };
 use tokio_rustls::rustls::{
@@ -54,6 +54,15 @@ where
     let mut bs = BytesMut::new();
     bs.put(&buf[..len]);
     Ok(Some(bs))
+}
+
+pub async fn send_buf<W>(writer: &mut W, buf: &[u8]) -> anyhow::Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    writer.write_all(&buf).await?;
+    writer.flush().await?;
+    Ok(())
 }
 
 pub fn read_ssl_config(

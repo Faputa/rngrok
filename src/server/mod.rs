@@ -21,7 +21,7 @@ use tokio::{
 use tokio_rustls::{rustls::ServerConfig, server::TlsStream};
 use tokio_util::either::Either;
 
-use crate::util;
+use crate::util::read_ssl_config;
 
 use self::{
     http::{HttpListener, HttpsListener},
@@ -92,14 +92,14 @@ impl From<TlsStream<TcpStream>> for MyTcpStream {
 #[derive(Debug)]
 pub struct Request {
     pub url: String,
-    pub proxy_writer_sender: mpsc::Sender<OwnedWriteHalf>,
+    pub proxy_writer_sender: mpsc::Sender<TcpWriter>,
     pub request_writer: TcpWriter,
 }
 
 impl Request {
     pub fn new(
         url: String,
-        proxy_writer_sender: mpsc::Sender<OwnedWriteHalf>,
+        proxy_writer_sender: mpsc::Sender<TcpWriter>,
         request_writer: TcpWriter,
     ) -> Self {
         Self {
@@ -112,13 +112,13 @@ impl Request {
 
 pub struct Client {
     pub id: String,
-    pub writer: Mutex<OwnedWriteHalf>,
+    pub writer: Mutex<TcpWriter>,
     pub request_sender: mpsc::Sender<Request>,
     pub request_receiver: Mutex<mpsc::Receiver<Request>>,
 }
 
 impl Client {
-    pub fn new(writer: OwnedWriteHalf, id: String) -> Self {
+    pub fn new(writer: TcpWriter, id: String) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(1);
         Self {
             id,
@@ -166,12 +166,12 @@ impl Context {
             (Some(ssl_crt), Some(ssl_key)) => {
                 let crt = &mut BufReader::new(File::open(ssl_crt)?);
                 let key = &mut BufReader::new(File::open(ssl_key)?);
-                util::read_ssl_config(crt, key)
+                read_ssl_config(crt, key)
             }
             _ => {
                 let crt = include_bytes!("../../server.crt");
                 let key = include_bytes!("../../server.key");
-                util::read_ssl_config(&mut &crt[..], &mut &key[..])
+                read_ssl_config(&mut &crt[..], &mut &key[..])
             }
         }
     }
