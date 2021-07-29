@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bytes::BufMut;
-use tokio::io;
+use tokio::io::{self, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
@@ -119,6 +119,7 @@ async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow
 
         send_buf(&mut proxy_writer, &buf).await?;
         let _ = io::copy(&mut reader, &mut proxy_writer).await;
+        let _ = proxy_writer.shutdown().await;
 
         return Ok(());
     }

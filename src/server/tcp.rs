@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::io;
+use tokio::io::{self, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 
@@ -78,6 +78,7 @@ async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String) -> anyhow::Res
         .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
     let _ = io::copy(&mut reader, &mut proxy_writer).await;
+    let _ = proxy_writer.shutdown().await;
 
     Ok(())
 }

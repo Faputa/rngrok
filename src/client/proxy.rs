@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::io;
+use tokio::io::{self, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
@@ -89,6 +89,7 @@ impl ProxyConnect {
         tokio::spawn(LocalConnect::new(local_reader, writer).run_select(shutdown));
 
         let _ = io::copy(&mut reader, &mut local_writer).await;
+        let _ = local_writer.shutdown().await;
 
         Ok(())
     }
@@ -116,6 +117,7 @@ impl LocalConnect {
 
     async fn run(&mut self) {
         let _ = io::copy(&mut self.local_reader, &mut self.remote_writer).await;
+        let _ = self.remote_writer.shutdown().await;
     }
 }
 

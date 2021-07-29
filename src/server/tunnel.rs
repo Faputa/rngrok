@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::io;
+use tokio::io::{self, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
@@ -154,6 +154,7 @@ impl TunnelHandler {
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
         let _ = io::copy(&mut reader, &mut request.request_writer).await;
+        let _ = request.request_writer.shutdown().await;
 
         Ok(())
     }
