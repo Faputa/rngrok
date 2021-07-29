@@ -140,30 +140,6 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(
-        domain: String,
-        port: u16,
-        http_port: Option<u16>,
-        https_port: Option<u16>,
-        ssl_crt: Option<String>,
-        ssl_key: Option<String>,
-        so_timeout: Option<u64>,
-        ping_timeout: Option<u64>,
-    ) -> Self {
-        Self {
-            domain,
-            port,
-            http_port,
-            https_port,
-            ssl_crt,
-            ssl_key,
-            so_timeout: so_timeout.unwrap_or(28800),
-            ping_timeout: ping_timeout.unwrap_or(120),
-            client_map: RwLock::new(HashMap::new()),
-            tunnel_map: RwLock::new(HashMap::new()),
-        }
-    }
-
     pub fn ssl_config(&self) -> anyhow::Result<ServerConfig> {
         match (&self.ssl_crt, &self.ssl_key) {
             (Some(ssl_crt), Some(ssl_key)) => {
@@ -195,16 +171,18 @@ impl Server {
         so_timeout: Option<u64>,
         ping_timeout: Option<u64>,
     ) -> Self {
-        let ctx = Arc::new(Context::new(
+        let ctx = Arc::new(Context {
             domain,
             port,
             http_port,
             https_port,
             ssl_crt,
             ssl_key,
-            so_timeout,
-            ping_timeout,
-        ));
+            so_timeout: so_timeout.unwrap_or(28800),
+            ping_timeout: ping_timeout.unwrap_or(120),
+            client_map: RwLock::new(HashMap::new()),
+            tunnel_map: RwLock::new(HashMap::new()),
+        });
         Self { ctx }
     }
 

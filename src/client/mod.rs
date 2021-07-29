@@ -43,25 +43,6 @@ pub struct Context {
     pub ping_time: u64,
 }
 
-impl Context {
-    pub fn new(
-        server_host: String,
-        server_port: u16,
-        tunnel_list: Vec<TunnelConfig>,
-        so_timeout: Option<u64>,
-        ping_time: Option<u64>,
-    ) -> Self {
-        Self {
-            server_host,
-            server_port,
-            tunnel_list,
-            tunnel_map: Mutex::new(HashMap::new()),
-            so_timeout: so_timeout.unwrap_or(28800),
-            ping_time: ping_time.unwrap_or(10),
-        }
-    }
-}
-
 pub struct Client {
     ctx: Arc<Context>,
 }
@@ -74,13 +55,14 @@ impl Client {
         so_timeout: Option<u64>,
         ping_time: Option<u64>,
     ) -> Self {
-        let ctx = Arc::new(Context::new(
+        let ctx = Arc::new(Context {
             server_host,
             server_port,
             tunnel_list,
-            so_timeout,
-            ping_time,
-        ));
+            tunnel_map: Mutex::new(HashMap::new()),
+            so_timeout: so_timeout.unwrap_or(28800),
+            ping_time: ping_time.unwrap_or(10),
+        });
         Self { ctx }
     }
 
