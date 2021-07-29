@@ -67,11 +67,9 @@ impl Client {
     }
 
     pub async fn run(&self) {
-        loop {
-            let connect = ControlConnect::new(self.ctx.clone());
-            if let Ok(_) = connect.run().await {
-                return;
-            };
+        let connect = ControlConnect::new(self.ctx.clone());
+        while let Err(e) = connect.run().await {
+            println!("{}", e);
             time::sleep(Duration::from_millis(1000)).await;
         }
     }
