@@ -5,21 +5,12 @@ use rngrok::client::{Client, Config};
 const DEFAULT_FILENAME: &str = "client.yml";
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let filename = env::args().nth(1).unwrap_or(DEFAULT_FILENAME.to_string());
-    let cfg = match fs::read_to_string(filename.clone()) {
-        Ok(s) => match serde_yaml::from_str::<Config>(&s) {
-            Ok(c) => c,
-            Err(e) => {
-                println!("Error parsing configuration file {}: {}", filename, e);
-                return;
-            }
-        },
-        Err(e) => {
-            println!("Failed to read configuration file {}: {}", filename, e);
-            return;
-        }
-    };
+    let s = fs::read_to_string(filename.clone())
+        .map_err(|e| anyhow::anyhow!("Failed to read configuration file {}: {}", filename, e))?;
+    let cfg = serde_yaml::from_str::<Config>(&s)
+        .map_err(|e| anyhow::anyhow!("Error parsing configuration file {}: {}", filename, e))?;
     println!("{:?}", cfg);
 
     let client = Client::new(
@@ -29,5 +20,5 @@ async fn main() {
         cfg.so_timeout,
         cfg.ping_time,
     );
-    client.run().await;
+    Ok(client.run().await)
 }

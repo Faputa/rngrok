@@ -5,32 +5,24 @@ use rngrok::server::{Config, Server};
 const DEFAULT_FILENAME: &str = "server.yml";
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let cfg = match env::args().nth(1) {
-        Some(filename) => match fs::read_to_string(&filename) {
-            Ok(s) => match serde_yaml::from_str::<Config>(&s) {
-                Ok(c) => c,
-                Err(e) => {
-                    println!("Error parsing configuration file {}: {}", filename, e);
-                    return;
-                }
-            },
-            Err(e) => {
-                println!("Failed to read configuration file {}: {}", filename, e);
-                return;
-            }
-        },
+        Some(filename) => {
+            let s = fs::read_to_string(&filename).map_err(|e| {
+                anyhow::anyhow!("Failed to read configuration file {}: {}", filename, e)
+            })?;
+            serde_yaml::from_str::<Config>(&s).map_err(|e| {
+                anyhow::anyhow!("Error parsing configuration file {}: {}", filename, e)
+            })?
+        }
         None => match fs::read_to_string(DEFAULT_FILENAME) {
-            Ok(s) => match serde_yaml::from_str::<Config>(&s) {
-                Ok(c) => c,
-                Err(e) => {
-                    println!(
-                        "Error parsing configuration file {}: {}",
-                        DEFAULT_FILENAME, e
-                    );
-                    return;
-                }
-            },
+            Ok(s) => serde_yaml::from_str::<Config>(&s).map_err(|e| {
+                anyhow::anyhow!(
+                    "Error parsing configuration file {}: {}",
+                    DEFAULT_FILENAME,
+                    e
+                )
+            })?,
             Err(_) => Config::default(),
         },
     };
@@ -46,5 +38,5 @@ async fn main() {
         cfg.so_timeout,
         cfg.ping_timeout,
     );
-    server.run().await;
+    Ok(server.run().await)
 }
