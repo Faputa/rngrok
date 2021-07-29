@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use rngrok::pack::send_pack;
-use tokio::{io::AsyncWriteExt, net::TcpStream, time::sleep};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

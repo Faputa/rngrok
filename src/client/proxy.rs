@@ -1,19 +1,13 @@
 use std::sync::Arc;
 
-use tokio::{
-    io,
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
-    sync::broadcast,
-};
+use tokio::io;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
+use tokio::sync::broadcast;
 
-use crate::{
-    msg::{Envelope, RegProxy, StartProxy},
-    pack::{send_pack, PacketReader},
-    util::{send_buf, timeout},
-};
+use crate::msg::{Envelope, RegProxy, StartProxy};
+use crate::pack::{send_pack, PacketReader};
+use crate::util::{send_buf, timeout};
 
 use super::{Context, Tunnel};
 

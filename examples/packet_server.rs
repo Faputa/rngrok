@@ -1,6 +1,7 @@
 use bytes::BufMut;
 use rngrok::pack::PacketReader;
-use tokio::{io::AsyncReadExt, net::TcpListener};
+use tokio::io::AsyncReadExt;
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

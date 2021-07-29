@@ -2,31 +2,24 @@ mod http;
 mod tcp;
 mod tunnel;
 
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::BufReader,
-    sync::{Arc, RwLock},
-};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
-use tokio::{
-    io::{split, ReadHalf, WriteHalf},
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
-    sync::{mpsc, Mutex},
-};
-use tokio_rustls::{rustls::ServerConfig, server::TlsStream};
+use tokio::io::{split, ReadHalf, WriteHalf};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
+use tokio::sync::{mpsc, Mutex};
+use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::server::TlsStream;
 use tokio_util::either::Either;
 
 use crate::util::read_ssl_config;
 
-use self::{
-    http::{HttpListener, HttpsListener},
-    tunnel::TunnelListener,
-};
+use self::http::{HttpListener, HttpsListener};
+use self::tunnel::TunnelListener;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {

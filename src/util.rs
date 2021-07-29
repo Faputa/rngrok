@@ -1,19 +1,14 @@
-use std::{
-    collections::HashMap,
-    io::{self, BufRead},
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::io::{self, BufRead};
+use std::time::Duration;
 
 use bytes::{BufMut, BytesMut};
-use rand::{distributions::Alphanumeric, Rng};
-use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    time,
-};
-use tokio_rustls::rustls::{
-    internal::pemfile::{certs, pkcs8_private_keys},
-    NoClientAuth, ServerConfig,
-};
+use rand::distributions::Alphanumeric;
+use rand::Rng;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::time;
+use tokio_rustls::rustls::internal::pemfile::{certs, pkcs8_private_keys};
+use tokio_rustls::rustls::{NoClientAuth, ServerConfig};
 
 pub fn rand_id(len: usize) -> String {
     rand::thread_rng()

@@ -1,17 +1,13 @@
 use std::sync::Arc;
 
 use bytes::BufMut;
-use tokio::{
-    io,
-    net::TcpListener,
-    sync::{broadcast, mpsc},
-};
+use tokio::io;
+use tokio::net::TcpListener;
+use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
 
-use crate::{
-    server::Request,
-    util::{read_buf, read_http_head, send_buf, timeout},
-};
+use crate::server::Request;
+use crate::util::{read_buf, read_http_head, send_buf, timeout};
 
 use super::{Context, MyTcpStream};
 

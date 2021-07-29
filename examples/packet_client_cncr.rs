@@ -1,8 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use bytes::Bytes;
 use rngrok::pack::send_pack;
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, time::sleep};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::sync::Mutex;
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

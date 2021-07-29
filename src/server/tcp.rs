@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use tokio::{
-    io,
-    net::{TcpListener, TcpStream},
-    sync::{broadcast, mpsc},
-};
+use tokio::io;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{broadcast, mpsc};
 
 use crate::util::timeout;
 

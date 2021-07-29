@@ -1,4 +1,5 @@
-use rngrok::{msg::*, util};
+use rngrok::msg::*;
+use rngrok::util;
 
 fn main() -> anyhow::Result<()> {
     let msg = Envelope::from(RegProxy {
