@@ -64,7 +64,7 @@ impl TunnelHandler {
         let (mut reader, writer) = stream.into_split();
         let mut packet_reader = PacketReader::new(&mut reader);
 
-        let json = match packet_reader.read().await? {
+        let json = match timeout(self.ctx.so_timeout, packet_reader.read()).await?? {
             Some(s) => s,
             None => return Ok(()),
         };
@@ -104,7 +104,7 @@ impl TunnelHandler {
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         loop {
-            let json = match reader.read().await? {
+            let json = match timeout(self.ctx.ping_timeout, reader.read()).await?? {
                 Some(s) => s,
                 None => return Ok(()),
             };

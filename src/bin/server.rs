@@ -43,6 +43,8 @@ async fn main() {
         cfg.https_port,
         cfg.ssl_crt,
         cfg.ssl_key,
+        cfg.so_timeout,
+        cfg.ping_timeout,
     );
     server.run().await;
 }

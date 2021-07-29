@@ -4,3 +4,5 @@ http_port: 80
 https_port: 443
 ssl_crt: server.crt
 ssl_key: server.key
+so_timeout: 28800
+ping_timeout: 120

@@ -29,6 +29,8 @@ pub struct Config {
     pub https_port: Option<u16>,
     pub ssl_crt: Option<String>,
     pub ssl_key: Option<String>,
+    pub so_timeout: Option<u64>,
+    pub ping_timeout: Option<u64>,
 }
 
 impl Default for Config {
@@ -40,6 +42,8 @@ impl Default for Config {
             https_port: Some(443),
             ssl_crt: None,
             ssl_key: None,
+            so_timeout: None,
+            ping_timeout: None,
         }
     }
 }
@@ -129,6 +133,8 @@ pub struct Context {
     pub https_port: Option<u16>,
     pub ssl_crt: Option<String>,
     pub ssl_key: Option<String>,
+    pub so_timeout: u64,
+    pub ping_timeout: u64,
     pub client_map: RwLock<HashMap<String, Arc<Client>>>,
     pub tunnel_map: RwLock<HashMap<String, Arc<Client>>>,
 }
@@ -141,6 +147,8 @@ impl Context {
         https_port: Option<u16>,
         ssl_crt: Option<String>,
         ssl_key: Option<String>,
+        so_timeout: Option<u64>,
+        ping_timeout: Option<u64>,
     ) -> Self {
         Self {
             domain,
@@ -149,6 +157,8 @@ impl Context {
             https_port,
             ssl_crt,
             ssl_key,
+            so_timeout: so_timeout.unwrap_or(28800),
+            ping_timeout: ping_timeout.unwrap_or(120),
             client_map: RwLock::new(HashMap::new()),
             tunnel_map: RwLock::new(HashMap::new()),
         }
@@ -182,9 +192,18 @@ impl Server {
         https_port: Option<u16>,
         ssl_crt: Option<String>,
         ssl_key: Option<String>,
+        so_timeout: Option<u64>,
+        ping_timeout: Option<u64>,
     ) -> Self {
         let ctx = Arc::new(Context::new(
-            domain, port, http_port, https_port, ssl_crt, ssl_key,
+            domain,
+            port,
+            http_port,
+            https_port,
+            ssl_crt,
+            ssl_key,
+            so_timeout,
+            ping_timeout,
         ));
         Self { ctx }
     }
