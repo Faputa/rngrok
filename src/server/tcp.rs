@@ -45,12 +45,7 @@ impl Drop for MyTcpListener {
     }
 }
 
-async fn serve_select(
-    stream: TcpStream,
-    ctx: Arc<Context>,
-    url: String,
-    mut shutdown: broadcast::Receiver<()>,
-) {
+async fn serve_select(stream: TcpStream, ctx: Arc<Context>, url: String, mut shutdown: broadcast::Receiver<()>) {
     tokio::select! {
         res = serve(stream, ctx, url) => {
             if let Err(e) = res {

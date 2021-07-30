@@ -94,11 +94,7 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(
-        url: String,
-        proxy_writer_sender: mpsc::Sender<TcpWriter>,
-        request_writer: TcpWriter,
-    ) -> Self {
+    pub fn new(url: String, proxy_writer_sender: mpsc::Sender<TcpWriter>, request_writer: TcpWriter) -> Self {
         Self {
             url,
             proxy_writer_sender,

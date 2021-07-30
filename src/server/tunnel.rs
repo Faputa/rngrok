@@ -4,9 +4,7 @@ use tokio::io::{self, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
-use crate::msg::{
-    AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProxy, ReqTunnel, StartProxy,
-};
+use crate::msg::{AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProxy, ReqTunnel, StartProxy};
 use crate::pack::{send_pack, PacketReader};
 use crate::server::tcp::MyTcpListener;
 use crate::server::MyTcpStream;
@@ -85,19 +83,11 @@ impl TunnelHandler {
         }
     }
 
-    async fn new_control(
-        &mut self,
-        mut reader: PacketReader<'_, TcpReader>,
-        writer: TcpWriter,
-    ) -> anyhow::Result<()> {
+    async fn new_control(&mut self, mut reader: PacketReader<'_, TcpReader>, writer: TcpWriter) -> anyhow::Result<()> {
         let id = rand_id(16);
         self.id = Some(id.clone());
         let client = Arc::new(Client::new(writer, id.clone()));
-        self.ctx
-            .client_map
-            .write()
-            .unwrap()
-            .insert(id.clone(), client.clone());
+        self.ctx.client_map.write().unwrap().insert(id.clone(), client.clone());
 
         send_pack(&mut *client.writer.lock().await, auth_resp(id.clone())).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
@@ -181,11 +171,7 @@ impl TunnelHandler {
                 let tcp_listener = MyTcpListener::new(listener, self.ctx.clone(), url.clone());
                 tokio::spawn(tcp_listener.run_select(shutdown));
 
-                self.ctx
-                    .tunnel_map
-                    .write()
-                    .unwrap()
-                    .insert(url.clone(), client.clone());
+                self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
 
                 send_pack(
                     &mut *client.writer.lock().await,
@@ -203,11 +189,7 @@ impl TunnelHandler {
                     format!("{}://{}.{}", protocol, rand_id(6), self.ctx.domain)
                 };
 
-                self.ctx
-                    .tunnel_map
-                    .write()
-                    .unwrap()
-                    .insert(url.clone(), client.clone());
+                self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
 
                 send_pack(
                     &mut *client.writer.lock().await,

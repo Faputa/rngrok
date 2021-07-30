@@ -72,9 +72,7 @@ impl ControlConnect {
                         println!("Server failed to allocate tunnel: {}", &err);
                         return Ok(());
                     }
-                    let &tunnel = req_id_to_tunnel_config
-                        .get(&new_tunnel.req_id.unwrap())
-                        .unwrap();
+                    let &tunnel = req_id_to_tunnel_config.get(&new_tunnel.req_id.unwrap()).unwrap();
                     self.ctx.tunnel_map.lock().unwrap().insert(
                         new_tunnel.url.clone().unwrap(),
                         Arc::new(Tunnel {
@@ -87,8 +85,7 @@ impl ControlConnect {
                 }
                 Message::ReqProxy(_) => {
                     tokio::spawn(
-                        ProxyConnect::new(self.ctx.clone(), id.clone())
-                            .run_select(notify_shutdown.subscribe()),
+                        ProxyConnect::new(self.ctx.clone(), id.clone()).run_select(notify_shutdown.subscribe()),
                     );
                 }
                 Message::Pong(_) => {}

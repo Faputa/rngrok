@@ -60,14 +60,9 @@ where
     Ok(())
 }
 
-pub fn read_ssl_config(
-    crt: &mut dyn BufRead,
-    key: &mut dyn BufRead,
-) -> anyhow::Result<ServerConfig> {
-    let certs =
-        certs(crt).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid cert"))?;
-    let mut keys = pkcs8_private_keys(key)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid key"))?;
+pub fn read_ssl_config(crt: &mut dyn BufRead, key: &mut dyn BufRead) -> anyhow::Result<ServerConfig> {
+    let certs = certs(crt).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid cert"))?;
+    let mut keys = pkcs8_private_keys(key).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid key"))?;
 
     let mut config = ServerConfig::new(NoClientAuth::new());
     config.set_single_cert(certs, keys.remove(0))?;

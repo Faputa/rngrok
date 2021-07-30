@@ -68,12 +68,7 @@ impl HttpsListener {
     }
 }
 
-async fn serve_select(
-    stream: MyTcpStream,
-    ctx: Arc<Context>,
-    protocol: &str,
-    mut shutdown: broadcast::Receiver<()>,
-) {
+async fn serve_select(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mut shutdown: broadcast::Receiver<()>) {
     tokio::select! {
         res = serve(stream, ctx, protocol) => {
             if let Err(e) = res {
