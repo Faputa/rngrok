@@ -8,6 +8,7 @@ use crate::client::proxy::ProxyConnect;
 use crate::client::{Tunnel, TunnelConfig};
 use crate::msg::{Auth, AuthResp, Envelope, Message, Ping, ReqTunnel};
 use crate::pack::{send_pack, PacketReader};
+use crate::unwrap_or;
 use crate::util::{rand_id, timeout};
 
 use super::Context;
@@ -28,10 +29,7 @@ impl ControlConnect {
         let mut reader = PacketReader::new(&mut reader);
 
         send_pack(&mut writer, auth()).await?;
-        let json = match timeout(self.ctx.so_timeout, reader.read()).await?? {
-            Some(s) => s,
-            None => return Ok(()),
-        };
+        let json = unwrap_or!(timeout(self.ctx.so_timeout, reader.read()).await??, return Ok(()));
         println!("{}", json);
 
         let msg = serde_json::from_str::<Envelope>(&json)?;
@@ -56,8 +54,7 @@ impl ControlConnect {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         loop {
             let json = match timeout(self.ctx.ping_time, reader.read()).await {
-                Ok(Ok(Some(s))) => s,
-                Ok(Ok(None)) => return Ok(()),
+                Ok(Ok(s)) => unwrap_or!(s, return Ok(())),
                 Ok(Err(e)) => Err(e)?,
                 Err(_) => {
                     send_pack(&mut writer, ping()).await?;
@@ -72,7 +69,7 @@ impl ControlConnect {
                         println!("Server failed to allocate tunnel: {}", &err);
                         return Ok(());
                     }
-                    let &tunnel = req_id_to_tunnel_config.get(&new_tunnel.req_id.unwrap()).unwrap();
+                    let &tunnel = unwrap_or!(req_id_to_tunnel_config.get(&new_tunnel.req_id.unwrap()), return Ok(()));
                     self.ctx.tunnel_map.lock().unwrap().insert(
                         new_tunnel.url.clone().unwrap(),
                         Arc::new(Tunnel {

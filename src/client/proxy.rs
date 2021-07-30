@@ -6,6 +6,7 @@ use tokio::sync::broadcast;
 
 use crate::msg::{Envelope, RegProxy, StartProxy};
 use crate::pack::{send_pack, PacketReader};
+use crate::unwrap_or;
 use crate::util::{relay_data, send_buf, timeout};
 
 use super::{Context, Tunnel};
@@ -35,10 +36,7 @@ impl ProxyConnect {
         }
 
         let mut packet_reader = PacketReader::new(&mut stream);
-        let json = match timeout(self.ctx.so_timeout, packet_reader.read()).await?? {
-            Some(s) => s,
-            None => return Ok(()),
-        };
+        let json = unwrap_or!(timeout(self.ctx.so_timeout, packet_reader.read()).await??, return Ok(()));
         println!("{}", json);
 
         let msg = serde_json::from_str::<Envelope>(&json)?;
@@ -50,13 +48,11 @@ impl ProxyConnect {
             }
         };
 
-        let tunnel = match self.ctx.tunnel_map.lock().unwrap().get(&start_proxy.url) {
-            Some(tunnel) => tunnel.clone(),
-            None => {
-                println!("Couldn't find tunnel for proxy: {}", start_proxy.url);
-                return Ok(());
-            }
-        };
+        let tunnel = unwrap_or!(self.ctx.tunnel_map.lock().unwrap().get(&start_proxy.url), {
+            println!("Couldn't find tunnel for proxy: {}", start_proxy.url);
+            return Ok(());
+        })
+        .clone();
 
         let local_stream = match TcpStream::connect(&tunnel.local_addr).await {
             Ok(local_stream) => local_stream,
@@ -74,10 +70,7 @@ impl ProxyConnect {
         let (mut reader, writer) = stream.into_split();
 
         let (_notify_shutdown, shutdown) = broadcast::channel::<()>(1);
-        tokio::spawn(run_local(
-            LocalConnect::new(self.ctx.clone(), local_reader, writer),
-            shutdown,
-        ));
+        tokio::spawn(run_local(LocalConnect::new(self.ctx.clone(), local_reader, writer), shutdown));
 
         relay_data(self.ctx.so_timeout, &mut reader, &mut local_writer).await
     }

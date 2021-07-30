@@ -13,12 +13,6 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Error parsing configuration file {}: {}", filename, e))?;
     println!("{:?}", cfg);
 
-    let client = Client::new(
-        cfg.server_host,
-        cfg.server_port,
-        cfg.tunnel_list,
-        cfg.so_timeout,
-        cfg.ping_time,
-    );
+    let client = Client::new(cfg.server_host, cfg.server_port, cfg.tunnel_list, cfg.so_timeout, cfg.ping_time);
     Ok(client.run().await)
 }

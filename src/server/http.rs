@@ -6,6 +6,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
 
 use crate::server::Request;
+use crate::unwrap_or;
 use crate::util::{read_buf, read_http_head, relay_data, send_buf, timeout};
 
 use super::{Context, MyTcpStream};
@@ -27,11 +28,7 @@ impl HttpListener {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
             let stream = MyTcpStream::from(stream);
-            tokio::spawn(serve(
-                HttpHandler::new(self.ctx.clone(), "http"),
-                stream,
-                notify_shutdown.subscribe(),
-            ));
+            tokio::spawn(serve(HttpHandler::new(self.ctx.clone(), "http"), stream, notify_shutdown.subscribe()));
         }
     }
 }
@@ -89,31 +86,19 @@ impl<'a> HttpHandler<'a> {
 
     async fn run(&self, stream: MyTcpStream) -> anyhow::Result<()> {
         let (mut reader, writer) = stream.into_split();
-        let mut buf = match timeout(self.ctx.so_timeout, read_buf(&mut reader)).await?? {
-            Some(b) => b,
-            None => return Ok(()),
-        };
+        let mut buf = unwrap_or!(timeout(self.ctx.so_timeout, read_buf(&mut reader)).await??, return Ok(()));
         loop {
-            let head = match read_http_head(&buf) {
-                Some(h) => h,
-                None => {
-                    let bs = match timeout(self.ctx.so_timeout, read_buf(&mut reader)).await?? {
-                        Some(b) => b,
-                        None => return Ok(()),
-                    };
-                    buf.put(bs);
-                    continue;
-                }
-            };
+            let head = unwrap_or!(read_http_head(&buf), {
+                let bs = unwrap_or!(timeout(self.ctx.so_timeout, read_buf(&mut reader)).await??, return Ok(()));
+                buf.put(bs);
+                continue;
+            });
 
             let url = format!("{}://{}", self.protocol, head.get("host").unwrap());
             let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
             let request = Request::new(url.clone(), proxy_writer_sender, writer);
 
-            let client = match self.ctx.tunnel_map.read().unwrap().get(&url) {
-                Some(s) => s.clone(),
-                None => return Ok(()),
-            };
+            let client = unwrap_or!(self.ctx.tunnel_map.read().unwrap().get(&url), return Ok(())).clone();
             client.request_sender.send(request).await?;
 
             let mut proxy_writer = timeout(60, proxy_writer_receiver.recv())

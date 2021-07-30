@@ -7,6 +7,7 @@ use crate::msg::{AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProx
 use crate::pack::{send_pack, PacketReader};
 use crate::server::tcp::MyTcpListener;
 use crate::server::MyTcpStream;
+use crate::unwrap_or;
 use crate::util::{rand_id, relay_data, timeout};
 
 use super::{Client, Context, TcpReader, TcpWriter};
@@ -28,11 +29,7 @@ impl TunnelListener {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
             let stream = MyTcpStream::from(stream);
-            tokio::spawn(serve(
-                TunnelHandler::new(self.ctx.clone()),
-                stream,
-                notify_shutdown.subscribe(),
-            ));
+            tokio::spawn(serve(TunnelHandler::new(self.ctx.clone()), stream, notify_shutdown.subscribe()));
         }
 
         Ok(())
@@ -64,10 +61,7 @@ impl TunnelHandler {
         let (mut reader, writer) = stream.into_split();
         let mut packet_reader = PacketReader::new(&mut reader);
 
-        let json = match timeout(self.ctx.so_timeout, packet_reader.read()).await?? {
-            Some(s) => s,
-            None => return Ok(()),
-        };
+        let json = unwrap_or!(timeout(self.ctx.so_timeout, packet_reader.read()).await??, return Ok(()));
         println!("{}", json);
 
         let msg = match Message::from_str(&json) {
@@ -96,10 +90,7 @@ impl TunnelHandler {
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         loop {
-            let json = match timeout(self.ctx.ping_timeout, reader.read()).await?? {
-                Some(s) => s,
-                None => return Ok(()),
-            };
+            let json = unwrap_or!(timeout(self.ctx.ping_timeout, reader.read()).await??, return Ok(()));
             println!("{}", json);
 
             match Message::from_str(&json)? {
@@ -120,19 +111,16 @@ impl TunnelHandler {
         mut writer: TcpWriter,
     ) -> anyhow::Result<()> {
         let id = reg_proxy.client_id;
-        let client = match self.ctx.client_map.read().unwrap().get(&id) {
-            Some(c) => c.clone(),
-            None => {
-                println!("No client found for identifier: {}", id);
-                return Ok(());
-            }
-        };
+        let client = unwrap_or!(self.ctx.client_map.read().unwrap().get(&id), {
+            println!("No client found for identifier: {}", id);
+            return Ok(());
+        })
+        .clone();
 
         let request_receiver = &client.request_receiver;
         let recv_request = async move { request_receiver.lock().await.recv().await };
         let mut request = match timeout(60, recv_request).await {
-            Ok(Some(r)) => r,
-            Ok(None) => return Ok(()),
+            Ok(req) => unwrap_or!(req, return Ok(())),
             Err(_) => {
                 send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
                 return Ok(());
@@ -166,18 +154,12 @@ impl TunnelHandler {
 
                 let url = format!("tcp://{}:{}", self.ctx.domain, port);
 
-                tokio::spawn(listen_tcp(
-                    MyTcpListener::new(listener, self.ctx.clone(), url.clone()),
-                    shutdown,
-                ));
+                tokio::spawn(listen_tcp(MyTcpListener::new(listener, self.ctx.clone(), url.clone()), shutdown));
 
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
 
-                send_pack(
-                    &mut *client.writer.lock().await,
-                    new_tunnel(req_tunnel.req_id, url, protocol.to_string()),
-                )
-                .await
+                send_pack(&mut *client.writer.lock().await, new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
+                    .await
             }
 
             protocol @ ("http" | "https") => {
@@ -191,11 +173,8 @@ impl TunnelHandler {
 
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
 
-                send_pack(
-                    &mut *client.writer.lock().await,
-                    new_tunnel(req_tunnel.req_id, url, protocol.to_string()),
-                )
-                .await
+                send_pack(&mut *client.writer.lock().await, new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
+                    .await
             }
 
             _ => Ok(()),

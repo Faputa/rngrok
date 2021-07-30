@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 
+use crate::unwrap_or;
 use crate::util::{relay_data, timeout};
 
 use super::{Context, Request, TcpWriter};
@@ -63,10 +64,7 @@ impl TcpHandler {
 
         let request = Request::new(self.url.clone(), proxy_writer_sender, TcpWriter::Left(writer));
 
-        let client = match self.ctx.tunnel_map.read().unwrap().get(&self.url) {
-            Some(s) => s.clone(),
-            None => return Ok(()),
-        };
+        let client = unwrap_or!(self.ctx.tunnel_map.read().unwrap().get(&self.url), return Ok(())).clone();
         client.request_sender.send(request).await?;
 
         let mut proxy_writer = timeout(60, proxy_writer_receiver.recv())
