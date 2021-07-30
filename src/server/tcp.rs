@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use tokio::io::{self, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 
-use crate::util::timeout;
+use crate::util::{relay_data_and_shutdown, timeout};
 
 use super::{Context, Request, TcpWriter};
 
@@ -72,8 +71,5 @@ async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String) -> anyhow::Res
         .await?
         .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
-    let _ = io::copy(&mut reader, &mut proxy_writer).await;
-    let _ = proxy_writer.shutdown().await;
-
-    Ok(())
+    relay_data_and_shutdown(ctx.so_timeout, &mut reader, &mut proxy_writer).await
 }

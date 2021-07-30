@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use tokio::io::{self, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
@@ -8,7 +7,7 @@ use crate::msg::{AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProx
 use crate::pack::{send_pack, PacketReader};
 use crate::server::tcp::MyTcpListener;
 use crate::server::MyTcpStream;
-use crate::util::{rand_id, timeout};
+use crate::util::{rand_id, relay_data_and_shutdown, timeout};
 
 use super::{Client, Context, TcpReader, TcpWriter};
 
@@ -143,10 +142,7 @@ impl TunnelHandler {
         request.proxy_writer_sender.send(writer).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
-        let _ = io::copy(&mut reader, &mut request.request_writer).await;
-        let _ = request.request_writer.shutdown().await;
-
-        Ok(())
+        relay_data_and_shutdown(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await
     }
 
     async fn register_tunnel(

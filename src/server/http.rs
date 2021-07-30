@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use bytes::BufMut;
-use tokio::io::{self, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
 
 use crate::server::Request;
-use crate::util::{read_buf, read_http_head, send_buf, timeout};
+use crate::util::{read_buf, read_http_head, relay_data_and_shutdown, send_buf, timeout};
 
 use super::{Context, MyTcpStream};
 
@@ -81,7 +80,7 @@ async fn serve_select(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mu
 
 async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow::Result<()> {
     let (mut reader, writer) = stream.into_split();
-    let mut buf = match read_buf(&mut reader).await? {
+    let mut buf = match timeout(ctx.so_timeout, read_buf(&mut reader)).await?? {
         Some(b) => b,
         None => return Ok(()),
     };
@@ -89,7 +88,7 @@ async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow
         let head = match read_http_head(&buf) {
             Some(h) => h,
             None => {
-                let bs = match read_buf(&mut reader).await? {
+                let bs = match timeout(ctx.so_timeout, read_buf(&mut reader)).await?? {
                     Some(b) => b,
                     None => return Ok(()),
                 };
@@ -113,8 +112,7 @@ async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow
             .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
         send_buf(&mut proxy_writer, &buf).await?;
-        let _ = io::copy(&mut reader, &mut proxy_writer).await;
-        let _ = proxy_writer.shutdown().await;
+        relay_data_and_shutdown(ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
 
         return Ok(());
     }

@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use tokio::io::{self, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 
 use crate::msg::{Envelope, RegProxy, StartProxy};
 use crate::pack::{send_pack, PacketReader};
-use crate::util::{send_buf, timeout};
+use crate::util::{relay_data_and_shutdown, send_buf, timeout};
 
 use super::{Context, Tunnel};
 
@@ -86,23 +85,22 @@ impl ProxyConnect {
         let (mut reader, writer) = stream.into_split();
 
         let (_notify_shutdown, shutdown) = broadcast::channel::<()>(1);
-        tokio::spawn(LocalConnect::new(local_reader, writer).run_select(shutdown));
+        tokio::spawn(LocalConnect::new(self.ctx.clone(), local_reader, writer).run_select(shutdown));
 
-        let _ = io::copy(&mut reader, &mut local_writer).await;
-        let _ = local_writer.shutdown().await;
-
-        Ok(())
+        relay_data_and_shutdown(self.ctx.so_timeout, &mut reader, &mut local_writer).await
     }
 }
 
 struct LocalConnect {
+    ctx: Arc<Context>,
     local_reader: OwnedReadHalf,
     remote_writer: OwnedWriteHalf,
 }
 
 impl LocalConnect {
-    fn new(local_reader: OwnedReadHalf, remote_writer: OwnedWriteHalf) -> Self {
+    fn new(ctx: Arc<Context>, local_reader: OwnedReadHalf, remote_writer: OwnedWriteHalf) -> Self {
         Self {
+            ctx,
             local_reader,
             remote_writer,
         }
@@ -110,14 +108,17 @@ impl LocalConnect {
 
     async fn run_select(mut self, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
-            _ = self.run() => {}
+            res = self.run() => {
+                if let Err(e) = res {
+                    println!("{}", e);
+                }
+            }
             _ = shutdown.recv() => {}
         }
     }
 
-    async fn run(&mut self) {
-        let _ = io::copy(&mut self.local_reader, &mut self.remote_writer).await;
-        let _ = self.remote_writer.shutdown().await;
+    async fn run(&mut self) -> anyhow::Result<()> {
+        relay_data_and_shutdown(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
     }
 }
 

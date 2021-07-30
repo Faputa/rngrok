@@ -60,6 +60,34 @@ where
     Ok(())
 }
 
+pub async fn relay_data_and_shutdown<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    if let Err(e) = relay_data(so_timeout, reader, writer).await {
+        println!("{}", e);
+    };
+    writer.shutdown().await?;
+    Ok(())
+}
+
+pub async fn relay_data<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    const BUFFER_SIZE: usize = 16 * 1024;
+    let mut buf = [0; BUFFER_SIZE];
+    loop {
+        let len = timeout(so_timeout, reader.read(&mut buf)).await??;
+        if len == 0 {
+            return Ok(());
+        }
+        timeout(so_timeout, writer.write_all(&buf[..len])).await??;
+    }
+}
+
 pub fn read_ssl_config(crt: &mut dyn BufRead, key: &mut dyn BufRead) -> anyhow::Result<ServerConfig> {
     let certs = certs(crt).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid cert"))?;
     let mut keys = pkcs8_private_keys(key).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid key"))?;
