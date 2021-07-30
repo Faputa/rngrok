@@ -65,10 +65,10 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    if let Err(e) = relay_data_inner(so_timeout, reader, writer).await {
-        println!("{}", e);
-    };
-    writer.shutdown().await?;
+    let res1 = relay_data_inner(so_timeout, reader, writer).await;
+    let res2 = writer.shutdown().await;
+    res1?;
+    res2?;
     Ok(())
 }
 
