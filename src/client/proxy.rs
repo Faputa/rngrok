@@ -20,18 +20,7 @@ impl ProxyConnect {
         Self { ctx, id }
     }
 
-    pub async fn run(self, mut shutdown: broadcast::Receiver<()>) {
-        tokio::select! {
-            res = self.run_raw() => {
-                if let Err(e) = res {
-                    println!("{:?}", e);
-                }
-            }
-            _ = shutdown.recv() => {}
-        }
-    }
-
-    async fn run_raw(&self) -> anyhow::Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let addr = format!("{}:{}", self.ctx.server_host, self.ctx.server_port);
         let mut stream = match TcpStream::connect(addr).await {
             Ok(t) => t,
@@ -52,7 +41,7 @@ impl ProxyConnect {
         };
         println!("{}", json);
 
-        let msg = serde_json::from_str::<Envelope>(&json).unwrap();
+        let msg = serde_json::from_str::<Envelope>(&json)?;
         let start_proxy = match serde_json::from_value::<StartProxy>(msg.payload) {
             Ok(m) => m,
             Err(e) => {
@@ -85,9 +74,23 @@ impl ProxyConnect {
         let (mut reader, writer) = stream.into_split();
 
         let (_notify_shutdown, shutdown) = broadcast::channel::<()>(1);
-        tokio::spawn(LocalConnect::new(self.ctx.clone(), local_reader, writer).run(shutdown));
+        tokio::spawn(run_local(
+            LocalConnect::new(self.ctx.clone(), local_reader, writer),
+            shutdown,
+        ));
 
         relay_data(self.ctx.so_timeout, &mut reader, &mut local_writer).await
+    }
+}
+
+async fn run_local(mut local_connect: LocalConnect, mut shutdown: broadcast::Receiver<()>) {
+    tokio::select! {
+        res = local_connect.run() => {
+            if let Err(e) = res {
+                println!("{}", e);
+            }
+        }
+        _ = shutdown.recv() => {}
     }
 }
 
@@ -106,18 +109,7 @@ impl LocalConnect {
         }
     }
 
-    async fn run(mut self, mut shutdown: broadcast::Receiver<()>) {
-        tokio::select! {
-            res = self.run_raw() => {
-                if let Err(e) = res {
-                    println!("{}", e);
-                }
-            }
-            _ = shutdown.recv() => {}
-        }
-    }
-
-    async fn run_raw(&mut self) -> anyhow::Result<()> {
+    async fn run(&mut self) -> anyhow::Result<()> {
         relay_data(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
     }
 }

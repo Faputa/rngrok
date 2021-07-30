@@ -185,12 +185,12 @@ impl Server {
     pub async fn run(&mut self) {
         if let Some(port) = self.ctx.http_port {
             let http_listener = HttpListener::new(self.ctx.clone());
-            tokio::spawn(http_listener.run(port));
+            tokio::spawn(async move { http_listener.run(port).await });
         }
 
         if let Some(port) = self.ctx.https_port {
             let https_listener = HttpsListener::new(self.ctx.clone());
-            tokio::spawn(https_listener.run(port));
+            tokio::spawn(async move { https_listener.run(port).await });
         }
 
         let tunnel_listener = TunnelListener::new(self.ctx.clone());

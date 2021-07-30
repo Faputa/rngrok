@@ -20,7 +20,7 @@ impl TunnelListener {
         Self { ctx }
     }
 
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let addr = format!("0.0.0.0:{}", self.ctx.port);
         let listener = TcpListener::bind(&addr).await?;
         println!("Listening for control and proxy connections on {}", addr);
@@ -28,11 +28,25 @@ impl TunnelListener {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
             let stream = MyTcpStream::from(stream);
-            let handler = TunnelHandler::new(self.ctx.clone());
-            tokio::spawn(handler.run(stream, notify_shutdown.subscribe()));
+            tokio::spawn(serve(
+                TunnelHandler::new(self.ctx.clone()),
+                stream,
+                notify_shutdown.subscribe(),
+            ));
         }
 
         Ok(())
+    }
+}
+
+async fn serve(mut tunnel_handler: TunnelHandler, stream: MyTcpStream, mut shutdown: broadcast::Receiver<()>) {
+    tokio::select! {
+        res = tunnel_handler.run(stream) => {
+            if let Err(e) = res {
+                println!("{}", e);
+            }
+        }
+        _ = shutdown.recv() => {}
     }
 }
 
@@ -42,22 +56,11 @@ struct TunnelHandler {
 }
 
 impl TunnelHandler {
-    pub fn new(ctx: Arc<Context>) -> Self {
+    fn new(ctx: Arc<Context>) -> Self {
         Self { id: None, ctx }
     }
 
-    pub async fn run(self, stream: MyTcpStream, mut shutdown: broadcast::Receiver<()>) {
-        tokio::select! {
-            res = self.run_raw(stream) => {
-                if let Err(e) = res {
-                    println!("{}", e);
-                }
-            }
-            _ = shutdown.recv() => {}
-        }
-    }
-
-    async fn run_raw(mut self, stream: MyTcpStream) -> anyhow::Result<()> {
+    async fn run(&mut self, stream: MyTcpStream) -> anyhow::Result<()> {
         let (mut reader, writer) = stream.into_split();
         let mut packet_reader = PacketReader::new(&mut reader);
 
@@ -99,9 +102,7 @@ impl TunnelHandler {
             };
             println!("{}", json);
 
-            let msg = Message::from_str(&json).unwrap();
-
-            match msg {
+            match Message::from_str(&json)? {
                 Message::ReqTunnel(req_tunnel) => {
                     self.register_tunnel(client.clone(), req_tunnel, notify_shutdown.subscribe())
                         .await?
@@ -164,8 +165,11 @@ impl TunnelHandler {
                 };
 
                 let url = format!("tcp://{}:{}", self.ctx.domain, port);
-                let tcp_listener = MyTcpListener::new(listener, self.ctx.clone(), url.clone());
-                tokio::spawn(tcp_listener.run(shutdown));
+
+                tokio::spawn(listen_tcp(
+                    MyTcpListener::new(listener, self.ctx.clone(), url.clone()),
+                    shutdown,
+                ));
 
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
 
@@ -196,6 +200,13 @@ impl TunnelHandler {
 
             _ => Ok(()),
         }
+    }
+}
+
+async fn listen_tcp(tcp_listener: MyTcpListener, mut shutdown: broadcast::Receiver<()>) {
+    tokio::select! {
+        _ = tcp_listener.run() => {}
+        _ = shutdown.recv() => {}
     }
 }
 

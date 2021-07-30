@@ -34,8 +34,8 @@ impl ControlConnect {
         };
         println!("{}", json);
 
-        let msg = serde_json::from_str::<Envelope>(&json).unwrap();
-        let auth_resp = serde_json::from_value::<AuthResp>(msg.payload).unwrap();
+        let msg = serde_json::from_str::<Envelope>(&json)?;
+        let auth_resp = serde_json::from_value::<AuthResp>(msg.payload)?;
 
         if let Some(err) = auth_resp.error {
             println!("Failed to authenticate to server: {}", &err);
@@ -84,12 +84,26 @@ impl ControlConnect {
                     println!("Tunnel established at {}", new_tunnel.url.unwrap());
                 }
                 Message::ReqProxy(_) => {
-                    tokio::spawn(ProxyConnect::new(self.ctx.clone(), id.clone()).run(notify_shutdown.subscribe()));
+                    tokio::spawn(connect_proxy(
+                        ProxyConnect::new(self.ctx.clone(), id.clone()),
+                        notify_shutdown.subscribe(),
+                    ));
                 }
                 Message::Pong(_) => {}
                 _ => {}
             }
         }
+    }
+}
+
+async fn connect_proxy(proxy_connect: ProxyConnect, mut shutdown: broadcast::Receiver<()>) {
+    tokio::select! {
+        res = proxy_connect.run() => {
+            if let Err(e) = res {
+                println!("{:?}", e);
+            }
+        }
+        _ = shutdown.recv() => {}
     }
 }
 

@@ -18,20 +18,12 @@ impl MyTcpListener {
         Self { listener, ctx, url }
     }
 
-    pub async fn run(self, mut shutdown: broadcast::Receiver<()>) {
-        tokio::select! {
-            _ = self.run_raw() => {}
-            _ = shutdown.recv() => {}
-        }
-    }
-
-    async fn run_raw(self) {
+    pub async fn run(&self) {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = self.listener.accept().await {
             tokio::spawn(serve(
+                TcpHandler::new(self.ctx.clone(), self.url.clone()),
                 stream,
-                self.ctx.clone(),
-                self.url.clone(),
                 notify_shutdown.subscribe(),
             ));
         }
@@ -44,9 +36,9 @@ impl Drop for MyTcpListener {
     }
 }
 
-async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String, mut shutdown: broadcast::Receiver<()>) {
+async fn serve(tcp_handler: TcpHandler, stream: TcpStream, mut shutdown: broadcast::Receiver<()>) {
     tokio::select! {
-        res = serve_raw(stream, ctx, url) => {
+        res = tcp_handler.run(stream) => {
             if let Err(e) = res {
                 println!("{}", e);
             }
@@ -55,21 +47,32 @@ async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String, mut shutdown: 
     }
 }
 
-async fn serve_raw(stream: TcpStream, ctx: Arc<Context>, url: String) -> anyhow::Result<()> {
-    let (mut reader, writer) = stream.into_split();
-    let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
+struct TcpHandler {
+    ctx: Arc<Context>,
+    url: String,
+}
 
-    let request = Request::new(url.clone(), proxy_writer_sender, TcpWriter::Left(writer));
+impl TcpHandler {
+    fn new(ctx: Arc<Context>, url: String) -> Self {
+        Self { ctx, url }
+    }
 
-    let client = match ctx.tunnel_map.read().unwrap().get(&url) {
-        Some(s) => s.clone(),
-        None => return Ok(()),
-    };
-    client.request_sender.send(request).await?;
+    async fn run(&self, stream: TcpStream) -> anyhow::Result<()> {
+        let (mut reader, writer) = stream.into_split();
+        let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
 
-    let mut proxy_writer = timeout(60, proxy_writer_receiver.recv())
-        .await?
-        .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
+        let request = Request::new(self.url.clone(), proxy_writer_sender, TcpWriter::Left(writer));
 
-    relay_data(ctx.so_timeout, &mut reader, &mut proxy_writer).await
+        let client = match self.ctx.tunnel_map.read().unwrap().get(&self.url) {
+            Some(s) => s.clone(),
+            None => return Ok(()),
+        };
+        client.request_sender.send(request).await?;
+
+        let mut proxy_writer = timeout(60, proxy_writer_receiver.recv())
+            .await?
+            .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
+
+        relay_data(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await
+    }
 }

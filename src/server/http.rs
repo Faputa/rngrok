@@ -19,7 +19,7 @@ impl HttpListener {
         Self { ctx }
     }
 
-    pub async fn run(self, port: u16) {
+    pub async fn run(&self, port: u16) {
         let addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&addr).await.unwrap();
         println!("Listening for public http connections on {}", addr);
@@ -27,7 +27,11 @@ impl HttpListener {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
             let stream = MyTcpStream::from(stream);
-            tokio::spawn(serve(stream, self.ctx.clone(), "http", notify_shutdown.subscribe()));
+            tokio::spawn(serve(
+                HttpHandler::new(self.ctx.clone(), "http"),
+                stream,
+                notify_shutdown.subscribe(),
+            ));
         }
     }
 }
@@ -41,7 +45,7 @@ impl HttpsListener {
         Self { ctx }
     }
 
-    pub async fn run(self, port: u16) {
+    pub async fn run(&self, port: u16) {
         let config = self.ctx.ssl_config().unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let addr = format!("0.0.0.0:{}", port);
@@ -56,15 +60,15 @@ impl HttpsListener {
             tokio::spawn(async move {
                 let stream = acceptor.accept(stream).await.unwrap();
                 let stream = MyTcpStream::from(stream);
-                serve(stream, ctx, "https", shutdown).await;
+                serve(HttpHandler::new(ctx, "https"), stream, shutdown).await;
             });
         }
     }
 }
 
-async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mut shutdown: broadcast::Receiver<()>) {
+async fn serve(http_handler: HttpHandler<'_>, stream: MyTcpStream, mut shutdown: broadcast::Receiver<()>) {
     tokio::select! {
-        res = serve_raw(stream, ctx, protocol) => {
+        res = http_handler.run(stream) => {
             if let Err(e) = res {
                 println!("{}", e);
             }
@@ -73,42 +77,53 @@ async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mut shutd
     }
 }
 
-async fn serve_raw(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow::Result<()> {
-    let (mut reader, writer) = stream.into_split();
-    let mut buf = match timeout(ctx.so_timeout, read_buf(&mut reader)).await?? {
-        Some(b) => b,
-        None => return Ok(()),
-    };
-    loop {
-        let head = match read_http_head(&buf) {
-            Some(h) => h,
-            None => {
-                let bs = match timeout(ctx.so_timeout, read_buf(&mut reader)).await?? {
-                    Some(b) => b,
-                    None => return Ok(()),
-                };
-                buf.put(bs);
-                continue;
-            }
-        };
+struct HttpHandler<'a> {
+    ctx: Arc<Context>,
+    protocol: &'a str,
+}
 
-        let url = format!("{}://{}", protocol, head.get("host").unwrap());
-        let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
-        let request = Request::new(url.clone(), proxy_writer_sender, writer);
+impl<'a> HttpHandler<'a> {
+    fn new(ctx: Arc<Context>, protocol: &'a str) -> Self {
+        Self { ctx, protocol }
+    }
 
-        let client = match ctx.tunnel_map.read().unwrap().get(&url) {
-            Some(s) => s.clone(),
+    async fn run(&self, stream: MyTcpStream) -> anyhow::Result<()> {
+        let (mut reader, writer) = stream.into_split();
+        let mut buf = match timeout(self.ctx.so_timeout, read_buf(&mut reader)).await?? {
+            Some(b) => b,
             None => return Ok(()),
         };
-        client.request_sender.send(request).await?;
+        loop {
+            let head = match read_http_head(&buf) {
+                Some(h) => h,
+                None => {
+                    let bs = match timeout(self.ctx.so_timeout, read_buf(&mut reader)).await?? {
+                        Some(b) => b,
+                        None => return Ok(()),
+                    };
+                    buf.put(bs);
+                    continue;
+                }
+            };
 
-        let mut proxy_writer = timeout(60, proxy_writer_receiver.recv())
-            .await?
-            .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
+            let url = format!("{}://{}", self.protocol, head.get("host").unwrap());
+            let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
+            let request = Request::new(url.clone(), proxy_writer_sender, writer);
 
-        send_buf(&mut proxy_writer, &buf).await?;
-        relay_data(ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
+            let client = match self.ctx.tunnel_map.read().unwrap().get(&url) {
+                Some(s) => s.clone(),
+                None => return Ok(()),
+            };
+            client.request_sender.send(request).await?;
 
-        return Ok(());
+            let mut proxy_writer = timeout(60, proxy_writer_receiver.recv())
+                .await?
+                .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
+
+            send_buf(&mut proxy_writer, &buf).await?;
+            relay_data(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
+
+            return Ok(());
+        }
     }
 }
