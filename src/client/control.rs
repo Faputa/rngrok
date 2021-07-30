@@ -84,9 +84,7 @@ impl ControlConnect {
                     println!("Tunnel established at {}", new_tunnel.url.unwrap());
                 }
                 Message::ReqProxy(_) => {
-                    tokio::spawn(
-                        ProxyConnect::new(self.ctx.clone(), id.clone()).run_select(notify_shutdown.subscribe()),
-                    );
+                    tokio::spawn(ProxyConnect::new(self.ctx.clone(), id.clone()).run(notify_shutdown.subscribe()));
                 }
                 Message::Pong(_) => {}
                 _ => {}

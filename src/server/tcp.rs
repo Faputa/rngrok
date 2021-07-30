@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 
-use crate::util::{relay_data_and_shutdown, timeout};
+use crate::util::{relay_data, timeout};
 
 use super::{Context, Request, TcpWriter};
 
@@ -18,17 +18,17 @@ impl MyTcpListener {
         Self { listener, ctx, url }
     }
 
-    pub async fn run_select(self, mut shutdown: broadcast::Receiver<()>) {
+    pub async fn run(self, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
-            _ = self.run() => {}
+            _ = self.run_raw() => {}
             _ = shutdown.recv() => {}
         }
     }
 
-    async fn run(self) {
+    async fn run_raw(self) {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = self.listener.accept().await {
-            tokio::spawn(serve_select(
+            tokio::spawn(serve(
                 stream,
                 self.ctx.clone(),
                 self.url.clone(),
@@ -44,9 +44,9 @@ impl Drop for MyTcpListener {
     }
 }
 
-async fn serve_select(stream: TcpStream, ctx: Arc<Context>, url: String, mut shutdown: broadcast::Receiver<()>) {
+async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String, mut shutdown: broadcast::Receiver<()>) {
     tokio::select! {
-        res = serve(stream, ctx, url) => {
+        res = serve_raw(stream, ctx, url) => {
             if let Err(e) = res {
                 println!("{}", e);
             }
@@ -55,7 +55,7 @@ async fn serve_select(stream: TcpStream, ctx: Arc<Context>, url: String, mut shu
     }
 }
 
-async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String) -> anyhow::Result<()> {
+async fn serve_raw(stream: TcpStream, ctx: Arc<Context>, url: String) -> anyhow::Result<()> {
     let (mut reader, writer) = stream.into_split();
     let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
 
@@ -71,5 +71,5 @@ async fn serve(stream: TcpStream, ctx: Arc<Context>, url: String) -> anyhow::Res
         .await?
         .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
-    relay_data_and_shutdown(ctx.so_timeout, &mut reader, &mut proxy_writer).await
+    relay_data(ctx.so_timeout, &mut reader, &mut proxy_writer).await
 }

@@ -6,7 +6,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
 
 use crate::server::Request;
-use crate::util::{read_buf, read_http_head, relay_data_and_shutdown, send_buf, timeout};
+use crate::util::{read_buf, read_http_head, relay_data, send_buf, timeout};
 
 use super::{Context, MyTcpStream};
 
@@ -27,12 +27,7 @@ impl HttpListener {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
             let stream = MyTcpStream::from(stream);
-            tokio::spawn(serve_select(
-                stream,
-                self.ctx.clone(),
-                "http",
-                notify_shutdown.subscribe(),
-            ));
+            tokio::spawn(serve(stream, self.ctx.clone(), "http", notify_shutdown.subscribe()));
         }
     }
 }
@@ -61,15 +56,15 @@ impl HttpsListener {
             tokio::spawn(async move {
                 let stream = acceptor.accept(stream).await.unwrap();
                 let stream = MyTcpStream::from(stream);
-                serve_select(stream, ctx, "https", shutdown).await;
+                serve(stream, ctx, "https", shutdown).await;
             });
         }
     }
 }
 
-async fn serve_select(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mut shutdown: broadcast::Receiver<()>) {
+async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mut shutdown: broadcast::Receiver<()>) {
     tokio::select! {
-        res = serve(stream, ctx, protocol) => {
+        res = serve_raw(stream, ctx, protocol) => {
             if let Err(e) = res {
                 println!("{}", e);
             }
@@ -78,7 +73,7 @@ async fn serve_select(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str, mu
     }
 }
 
-async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow::Result<()> {
+async fn serve_raw(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow::Result<()> {
     let (mut reader, writer) = stream.into_split();
     let mut buf = match timeout(ctx.so_timeout, read_buf(&mut reader)).await?? {
         Some(b) => b,
@@ -112,7 +107,7 @@ async fn serve(stream: MyTcpStream, ctx: Arc<Context>, protocol: &str) -> anyhow
             .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
         send_buf(&mut proxy_writer, &buf).await?;
-        relay_data_and_shutdown(ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
+        relay_data(ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
 
         return Ok(());
     }

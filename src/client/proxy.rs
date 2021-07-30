@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 
 use crate::msg::{Envelope, RegProxy, StartProxy};
 use crate::pack::{send_pack, PacketReader};
-use crate::util::{relay_data_and_shutdown, send_buf, timeout};
+use crate::util::{relay_data, send_buf, timeout};
 
 use super::{Context, Tunnel};
 
@@ -20,9 +20,9 @@ impl ProxyConnect {
         Self { ctx, id }
     }
 
-    pub async fn run_select(self, mut shutdown: broadcast::Receiver<()>) {
+    pub async fn run(self, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
-            res = self.run() => {
+            res = self.run_raw() => {
                 if let Err(e) = res {
                     println!("{:?}", e);
                 }
@@ -31,7 +31,7 @@ impl ProxyConnect {
         }
     }
 
-    async fn run(&self) -> anyhow::Result<()> {
+    async fn run_raw(&self) -> anyhow::Result<()> {
         let addr = format!("{}:{}", self.ctx.server_host, self.ctx.server_port);
         let mut stream = match TcpStream::connect(addr).await {
             Ok(t) => t,
@@ -85,9 +85,9 @@ impl ProxyConnect {
         let (mut reader, writer) = stream.into_split();
 
         let (_notify_shutdown, shutdown) = broadcast::channel::<()>(1);
-        tokio::spawn(LocalConnect::new(self.ctx.clone(), local_reader, writer).run_select(shutdown));
+        tokio::spawn(LocalConnect::new(self.ctx.clone(), local_reader, writer).run(shutdown));
 
-        relay_data_and_shutdown(self.ctx.so_timeout, &mut reader, &mut local_writer).await
+        relay_data(self.ctx.so_timeout, &mut reader, &mut local_writer).await
     }
 }
 
@@ -106,9 +106,9 @@ impl LocalConnect {
         }
     }
 
-    async fn run_select(mut self, mut shutdown: broadcast::Receiver<()>) {
+    async fn run(mut self, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
-            res = self.run() => {
+            res = self.run_raw() => {
                 if let Err(e) = res {
                     println!("{}", e);
                 }
@@ -117,8 +117,8 @@ impl LocalConnect {
         }
     }
 
-    async fn run(&mut self) -> anyhow::Result<()> {
-        relay_data_and_shutdown(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
+    async fn run_raw(&mut self) -> anyhow::Result<()> {
+        relay_data(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
     }
 }
 

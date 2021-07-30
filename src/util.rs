@@ -60,19 +60,19 @@ where
     Ok(())
 }
 
-pub async fn relay_data_and_shutdown<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
+pub async fn relay_data<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    if let Err(e) = relay_data(so_timeout, reader, writer).await {
+    if let Err(e) = relay_data_raw(so_timeout, reader, writer).await {
         println!("{}", e);
     };
     writer.shutdown().await?;
     Ok(())
 }
 
-pub async fn relay_data<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
+async fn relay_data_raw<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,

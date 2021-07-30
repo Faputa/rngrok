@@ -7,7 +7,7 @@ use crate::msg::{AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProx
 use crate::pack::{send_pack, PacketReader};
 use crate::server::tcp::MyTcpListener;
 use crate::server::MyTcpStream;
-use crate::util::{rand_id, relay_data_and_shutdown, timeout};
+use crate::util::{rand_id, relay_data, timeout};
 
 use super::{Client, Context, TcpReader, TcpWriter};
 
@@ -29,7 +29,7 @@ impl TunnelListener {
         while let Ok((stream, _)) = listener.accept().await {
             let stream = MyTcpStream::from(stream);
             let handler = TunnelHandler::new(self.ctx.clone());
-            tokio::spawn(handler.run_select(stream, notify_shutdown.subscribe()));
+            tokio::spawn(handler.run(stream, notify_shutdown.subscribe()));
         }
 
         Ok(())
@@ -46,9 +46,9 @@ impl TunnelHandler {
         Self { id: None, ctx }
     }
 
-    pub async fn run_select(self, stream: MyTcpStream, mut shutdown: broadcast::Receiver<()>) {
+    pub async fn run(self, stream: MyTcpStream, mut shutdown: broadcast::Receiver<()>) {
         tokio::select! {
-            res = self.run(stream) => {
+            res = self.run_raw(stream) => {
                 if let Err(e) = res {
                     println!("{}", e);
                 }
@@ -57,7 +57,7 @@ impl TunnelHandler {
         }
     }
 
-    async fn run(mut self, stream: MyTcpStream) -> anyhow::Result<()> {
+    async fn run_raw(mut self, stream: MyTcpStream) -> anyhow::Result<()> {
         let (mut reader, writer) = stream.into_split();
         let mut packet_reader = PacketReader::new(&mut reader);
 
@@ -142,7 +142,7 @@ impl TunnelHandler {
         request.proxy_writer_sender.send(writer).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
-        relay_data_and_shutdown(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await
+        relay_data(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await
     }
 
     async fn register_tunnel(
@@ -165,7 +165,7 @@ impl TunnelHandler {
 
                 let url = format!("tcp://{}:{}", self.ctx.domain, port);
                 let tcp_listener = MyTcpListener::new(listener, self.ctx.clone(), url.clone());
-                tokio::spawn(tcp_listener.run_select(shutdown));
+                tokio::spawn(tcp_listener.run(shutdown));
 
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
 
