@@ -23,19 +23,20 @@ impl ProxyConnect {
 
     pub async fn run(&self) -> anyhow::Result<()> {
         let addr = format!("{}:{}", self.ctx.server_host, self.ctx.server_port);
-        let mut stream = match TcpStream::connect(addr).await {
+        let stream = match TcpStream::connect(addr).await {
             Ok(t) => t,
             Err(e) => {
                 println!("Failed to establish proxy connection: {}", e);
                 return Ok(());
             }
         };
+        let (mut reader, mut writer) = stream.into_split();
 
-        if let Err(e) = send_pack(&mut stream, reg_proxy(self.id.clone())).await {
+        if let Err(e) = send_pack(&mut writer, reg_proxy(self.id.clone())).await {
             println!("Failed to write RegProxy: {}", e);
         }
 
-        let mut packet_reader = PacketReader::new(&mut stream);
+        let mut packet_reader = PacketReader::new(&mut reader);
         let json = unwrap_or!(timeout(self.ctx.so_timeout, packet_reader.read()).await??, return Ok(()));
         println!("{}", json);
 
@@ -59,19 +60,17 @@ impl ProxyConnect {
             Err(e) => {
                 println!("Failed to open private leg {}: {}", tunnel.local_addr, &e);
                 if tunnel.protocol.starts_with("http") {
-                    send_buf(&mut stream, bad_gateway(&tunnel).as_bytes()).await?;
+                    send_buf(&mut writer, bad_gateway(&tunnel).as_bytes()).await?;
                 }
                 return Ok(());
             }
         };
 
         let (local_reader, mut local_writer) = local_stream.into_split();
-        send_buf(&mut local_writer, &packet_reader.get_buf()).await?;
-        let (mut reader, writer) = stream.into_split();
-
         let (_notify_shutdown, shutdown) = broadcast::channel::<()>(1);
         tokio::spawn(run_local(LocalConnect::new(self.ctx.clone(), local_reader, writer), shutdown));
 
+        send_buf(&mut local_writer, &packet_reader.get_buf()).await?;
         relay_data(self.ctx.so_timeout, &mut reader, &mut local_writer).await
     }
 }

@@ -65,18 +65,6 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let res1 = relay_data_inner(so_timeout, reader, writer).await;
-    let res2 = writer.shutdown().await;
-    res1?;
-    res2?;
-    Ok(())
-}
-
-async fn relay_data_inner<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
     const BUFFER_SIZE: usize = 16 * 1024;
     let mut buf = [0; BUFFER_SIZE];
     loop {

@@ -46,8 +46,7 @@ impl ControlConnect {
         let mut req_id_to_tunnel_config = HashMap::<String, &TunnelConfig>::new();
         for tunnel in &self.ctx.tunnel_list {
             let req_id = rand_id(8);
-            let req_tunnel = req_tunnel(tunnel.clone(), req_id.clone());
-            send_pack(&mut writer, req_tunnel).await?;
+            send_pack(&mut writer, req_tunnel(tunnel.clone(), req_id.clone())).await?;
             req_id_to_tunnel_config.insert(req_id, &tunnel);
         }
 

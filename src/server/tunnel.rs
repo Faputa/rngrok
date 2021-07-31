@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
@@ -131,7 +132,10 @@ impl TunnelHandler {
         request.proxy_writer_sender.send(writer).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
-        relay_data(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await
+        relay_data(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await?;
+        request.request_writer.shutdown().await?;
+
+        Ok(())
     }
 
     async fn register_tunnel(

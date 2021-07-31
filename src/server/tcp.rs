@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 
@@ -71,6 +72,9 @@ impl TcpHandler {
             .await?
             .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
-        relay_data(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await
+        relay_data(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
+        proxy_writer.shutdown().await?;
+
+        Ok(())
     }
 }

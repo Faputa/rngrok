@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bytes::BufMut;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
@@ -107,6 +108,7 @@ impl<'a> HttpHandler<'a> {
 
             send_buf(&mut proxy_writer, &buf).await?;
             relay_data(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
+            proxy_writer.shutdown().await?;
 
             return Ok(());
         }
