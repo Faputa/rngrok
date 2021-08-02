@@ -16,6 +16,7 @@ pub struct Config {
     pub tunnel_list: Vec<TunnelConfig>,
     pub so_timeout: Option<u64>,
     pub ping_time: Option<u64>,
+    pub auth_token: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -41,6 +42,7 @@ pub struct Context {
     pub tunnel_map: Mutex<HashMap<String, Arc<Tunnel>>>,
     pub so_timeout: u64,
     pub ping_time: u64,
+    pub auth_token: String,
 }
 
 pub struct Client {
@@ -54,6 +56,7 @@ impl Client {
         tunnel_list: Vec<TunnelConfig>,
         so_timeout: Option<u64>,
         ping_time: Option<u64>,
+        auth_token: String,
     ) -> Self {
         let ctx = Arc::new(Context {
             server_host,
@@ -62,6 +65,7 @@ impl Client {
             tunnel_map: Mutex::new(HashMap::new()),
             so_timeout: so_timeout.unwrap_or(28800),
             ping_time: ping_time.unwrap_or(10),
+            auth_token,
         });
         Self { ctx }
     }

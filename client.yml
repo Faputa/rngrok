@@ -2,6 +2,7 @@ server_host: myngrok.com
 server_port: 4443
 so_timeout: 28800
 ping_time: 10
+auth_token: anyone
 tunnel_list:
   - protocol: http
     subdomain: www

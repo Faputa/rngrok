@@ -28,7 +28,7 @@ impl ControlConnect {
         let (mut reader, mut writer) = stream.split();
         let mut reader = PacketReader::new(&mut reader);
 
-        send_pack(&mut writer, auth()).await?;
+        send_pack(&mut writer, auth(self.ctx.auth_token.clone())).await?;
         let json = unwrap_or!(timeout(self.ctx.so_timeout, reader.read()).await??, return Ok(()));
         println!("{}", json);
 
@@ -103,11 +103,11 @@ async fn connect_proxy(proxy_connect: ProxyConnect, mut shutdown: broadcast::Rec
     }
 }
 
-fn auth() -> String {
+fn auth(auth_token: String) -> String {
     serde_json::to_string(&Envelope::from(Auth {
         version: "2".to_string(),
         mm_version: "1.7".to_string(),
-        user: "user".to_string(),
+        user: auth_token,
         password: "".to_string(),
         os: "darwin".to_string(),
         arch: "amd64".to_string(),
