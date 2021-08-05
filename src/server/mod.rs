@@ -157,32 +157,23 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(
-        domain: String,
-        port: u16,
-        http_port: Option<u16>,
-        https_port: Option<u16>,
-        ssl_crt: Option<String>,
-        ssl_key: Option<String>,
-        so_timeout: Option<u64>,
-        ping_timeout: Option<u64>,
-    ) -> Self {
+    pub fn new(cfg: Config) -> Self {
         let ctx = Arc::new(Context {
-            domain,
-            port,
-            http_port,
-            https_port,
-            ssl_crt,
-            ssl_key,
-            so_timeout: so_timeout.unwrap_or(28800),
-            ping_timeout: ping_timeout.unwrap_or(120),
+            domain: cfg.domain,
+            port: cfg.port,
+            http_port: cfg.http_port,
+            https_port: cfg.https_port,
+            ssl_crt: cfg.ssl_crt,
+            ssl_key: cfg.ssl_key,
+            so_timeout: cfg.so_timeout.unwrap_or(28800),
+            ping_timeout: cfg.ping_timeout.unwrap_or(120),
             client_map: RwLock::new(HashMap::new()),
             tunnel_map: RwLock::new(HashMap::new()),
         });
         Self { ctx }
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(&self) {
         if let Some(port) = self.ctx.http_port {
             let http_listener = HttpListener::new(self.ctx.clone());
             tokio::spawn(async move { http_listener.run(port).await });

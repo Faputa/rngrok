@@ -21,15 +21,6 @@ async fn main() -> anyhow::Result<()> {
     };
     println!("{:?}", cfg);
 
-    let mut server = Server::new(
-        cfg.domain,
-        cfg.port,
-        cfg.http_port,
-        cfg.https_port,
-        cfg.ssl_crt,
-        cfg.ssl_key,
-        cfg.so_timeout,
-        cfg.ping_timeout,
-    );
+    let server = Server::new(cfg);
     Ok(server.run().await)
 }

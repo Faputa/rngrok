@@ -50,22 +50,15 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(
-        server_host: String,
-        server_port: u16,
-        tunnel_list: Vec<TunnelConfig>,
-        so_timeout: Option<u64>,
-        ping_time: Option<u64>,
-        auth_token: String,
-    ) -> Self {
+    pub fn new(cfg: Config) -> Self {
         let ctx = Arc::new(Context {
-            server_host,
-            server_port,
-            tunnel_list,
+            server_host: cfg.server_host,
+            server_port: cfg.server_port,
+            tunnel_list: cfg.tunnel_list,
+            auth_token: cfg.auth_token,
+            so_timeout: cfg.so_timeout.unwrap_or(28800),
+            ping_time: cfg.ping_time.unwrap_or(10),
             tunnel_map: Mutex::new(HashMap::new()),
-            so_timeout: so_timeout.unwrap_or(28800),
-            ping_time: ping_time.unwrap_or(10),
-            auth_token,
         });
         Self { ctx }
     }
