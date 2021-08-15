@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 use crate::msg::{Envelope, RegProxy, StartProxy};
 use crate::pack::{send_pack, PacketReader};
 use crate::unwrap_or;
-use crate::util::{relay_data, send_buf, timeout};
+use crate::util::{forward, send_buf, timeout};
 
 use super::{Context, Tunnel};
 
@@ -71,7 +71,7 @@ impl ProxyConnect {
         tokio::spawn(run_local(LocalConnect::new(self.ctx.clone(), local_reader, writer), shutdown));
 
         send_buf(&mut local_writer, &packet_reader.get_buf()).await?;
-        relay_data(self.ctx.so_timeout, &mut reader, &mut local_writer).await
+        forward(self.ctx.so_timeout, &mut reader, &mut local_writer).await
     }
 }
 
@@ -102,7 +102,7 @@ impl LocalConnect {
     }
 
     async fn run(&mut self) -> anyhow::Result<()> {
-        relay_data(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
+        forward(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
     }
 }
 

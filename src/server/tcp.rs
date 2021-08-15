@@ -5,7 +5,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::unwrap_or;
-use crate::util::{relay_data, timeout};
+use crate::util::{forward, timeout};
 
 use super::{Context, Request, TcpWriter};
 
@@ -72,7 +72,7 @@ impl TcpHandler {
             .await?
             .ok_or(anyhow::anyhow!("No proxy_writer found"))?;
 
-        relay_data(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
+        forward(self.ctx.so_timeout, &mut reader, &mut proxy_writer).await?;
         proxy_writer.shutdown().await?;
 
         Ok(())

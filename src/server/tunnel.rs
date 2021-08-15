@@ -9,7 +9,7 @@ use crate::pack::{send_pack, PacketReader};
 use crate::server::tcp::MyTcpListener;
 use crate::server::MyTcpStream;
 use crate::unwrap_or;
-use crate::util::{rand_id, relay_data, timeout};
+use crate::util::{forward, rand_id, timeout};
 
 use super::{Client, Context, TcpReader, TcpWriter};
 
@@ -132,7 +132,7 @@ impl TunnelHandler {
         request.proxy_writer_sender.send(writer).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
-        relay_data(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await?;
+        forward(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await?;
         request.request_writer.shutdown().await?;
 
         Ok(())

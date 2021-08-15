@@ -60,7 +60,7 @@ where
     Ok(())
 }
 
-pub async fn relay_data<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
+pub async fn forward<R, W>(so_timeout: u64, reader: &mut R, writer: &mut W) -> anyhow::Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
