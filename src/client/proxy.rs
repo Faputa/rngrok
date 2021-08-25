@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
@@ -61,6 +62,7 @@ impl ProxyConnect {
                 println!("Failed to open private leg {}: {}", tunnel.local_addr, &e);
                 if tunnel.protocol.starts_with("http") {
                     send_buf(&mut writer, bad_gateway(&tunnel).as_bytes()).await?;
+                    writer.shutdown().await?;
                 }
                 return Ok(());
             }
@@ -71,7 +73,10 @@ impl ProxyConnect {
         tokio::spawn(run_local(LocalConnect::new(self.ctx.clone(), local_reader, writer), shutdown));
 
         send_buf(&mut local_writer, &packet_reader.get_buf()).await?;
-        forward(self.ctx.so_timeout, &mut reader, &mut local_writer).await
+        forward(self.ctx.so_timeout, &mut reader, &mut local_writer).await?;
+        local_writer.shutdown().await?;
+
+        Ok(())
     }
 }
 
@@ -102,7 +107,9 @@ impl LocalConnect {
     }
 
     async fn run(&mut self) -> anyhow::Result<()> {
-        forward(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await
+        forward(self.ctx.so_timeout, &mut self.local_reader, &mut self.remote_writer).await?;
+        self.remote_writer.shutdown().await?;
+        Ok(())
     }
 }
 

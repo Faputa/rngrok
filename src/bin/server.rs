@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
         None => match fs::read_to_string(DEFAULT_FILENAME) {
             Ok(s) => serde_yaml::from_str::<Config>(&s)
                 .map_err(|e| anyhow::anyhow!("Error parsing configuration file {}: {}", DEFAULT_FILENAME, e))?,
-            Err(_) => Config::default(),
+            Err(_) => Default::default(),
         },
     };
     println!("{:?}", cfg);
