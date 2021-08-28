@@ -14,5 +14,6 @@ async fn main() -> anyhow::Result<()> {
     println!("{:?}", cfg);
 
     let client = Client::new(cfg);
-    Ok(client.run().await)
+    client.run().await;
+    Ok(())
 }

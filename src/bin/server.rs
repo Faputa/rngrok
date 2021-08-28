@@ -22,5 +22,6 @@ async fn main() -> anyhow::Result<()> {
     println!("{:?}", cfg);
 
     let server = Server::new(cfg);
-    Ok(server.run().await)
+    server.run().await;
+    Ok(())
 }

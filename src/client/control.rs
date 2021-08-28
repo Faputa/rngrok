@@ -47,14 +47,14 @@ impl ControlConnect {
         for tunnel in &self.ctx.tunnel_list {
             let req_id = rand_id(8);
             send_pack(&mut writer, req_tunnel(tunnel.clone(), req_id.clone())).await?;
-            req_id_to_tunnel_config.insert(req_id, &tunnel);
+            req_id_to_tunnel_config.insert(req_id, tunnel);
         }
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         loop {
             let json = match timeout(self.ctx.ping_time, reader.read()).await {
                 Ok(Ok(s)) => unwrap_or!(s, return Ok(())),
-                Ok(Err(e)) => Err(e)?,
+                Ok(Err(e)) => return Err(e),
                 Err(_) => {
                     send_pack(&mut writer, ping()).await?;
                     continue;

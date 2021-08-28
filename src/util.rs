@@ -55,7 +55,7 @@ pub async fn send_buf<W>(writer: &mut W, buf: &[u8]) -> anyhow::Result<()>
 where
     W: AsyncWrite + Unpin,
 {
-    writer.write_all(&buf).await?;
+    writer.write_all(buf).await?;
     writer.flush().await?;
     Ok(())
 }
