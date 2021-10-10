@@ -1,16 +1,17 @@
 use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 
+use crate::client::MyTcpStream;
 use crate::msg::{Envelope, RegProxy, StartProxy};
 use crate::pack::{send_pack, PacketReader};
 use crate::unwrap_or;
 use crate::util::{forward, send_buf, timeout};
 
-use super::{Context, Tunnel};
+use super::{Context, TcpWriter, Tunnel};
 
 pub struct ProxyConnect {
     ctx: Arc<Context>,
@@ -23,8 +24,7 @@ impl ProxyConnect {
     }
 
     pub async fn run(&self) -> anyhow::Result<()> {
-        let addr = format!("{}:{}", self.ctx.server_host, self.ctx.server_port);
-        let stream = match TcpStream::connect(addr).await {
+        let stream = match MyTcpStream::connect(&self.ctx.server_host, self.ctx.server_port, self.ctx.use_ssl).await {
             Ok(t) => t,
             Err(e) => {
                 println!("Failed to establish proxy connection: {}", e);
@@ -94,11 +94,11 @@ async fn run_local(mut local_connect: LocalConnect, mut shutdown: broadcast::Rec
 struct LocalConnect {
     ctx: Arc<Context>,
     local_reader: OwnedReadHalf,
-    remote_writer: OwnedWriteHalf,
+    remote_writer: TcpWriter,
 }
 
 impl LocalConnect {
-    fn new(ctx: Arc<Context>, local_reader: OwnedReadHalf, remote_writer: OwnedWriteHalf) -> Self {
+    fn new(ctx: Arc<Context>, local_reader: OwnedReadHalf, remote_writer: TcpWriter) -> Self {
         Self {
             ctx,
             local_reader,

@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 
 use crate::client::proxy::ProxyConnect;
-use crate::client::{Tunnel, TunnelConfig};
+use crate::client::{MyTcpStream, Tunnel, TunnelConfig};
 use crate::msg::{Auth, AuthResp, Envelope, Message, Ping, ReqTunnel};
 use crate::pack::{send_pack, PacketReader};
 use crate::unwrap_or;
@@ -23,9 +22,8 @@ impl ControlConnect {
     }
 
     pub async fn run(&self) -> anyhow::Result<()> {
-        let addr = format!("{}:{}", self.ctx.server_host, self.ctx.server_port);
-        let mut stream = TcpStream::connect(addr).await?;
-        let (mut reader, mut writer) = stream.split();
+        let stream = MyTcpStream::connect(&self.ctx.server_host, self.ctx.server_port, self.ctx.use_ssl).await?;
+        let (mut reader, mut writer) = stream.into_split();
         let mut reader = PacketReader::new(&mut reader);
 
         send_pack(&mut writer, auth(self.ctx.auth_token.clone())).await?;

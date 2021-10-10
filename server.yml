@@ -6,3 +6,4 @@ ssl_crt: server.crt
 ssl_key: server.key
 so_timeout: 28800
 ping_timeout: 120
+use_ssl: true

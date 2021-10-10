@@ -3,6 +3,7 @@ server_port: 4443
 so_timeout: 28800
 ping_time: 10
 auth_token: anyone
+use_ssl: true
 tunnel_list:
   - protocol: http
     subdomain: www

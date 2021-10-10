@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
+use tokio_rustls::TlsAcceptor;
 
 use crate::msg::{AuthResp, Envelope, Message, NewTunnel, Pong, RegProxy, ReqProxy, ReqTunnel, StartProxy};
 use crate::pack::{send_pack, PacketReader};
@@ -23,14 +24,32 @@ impl TunnelListener {
     }
 
     pub async fn run(&self) -> anyhow::Result<()> {
+        let acceptor = if self.ctx.use_ssl {
+            let config = self.ctx.ssl_config().unwrap();
+            let acceptor = TlsAcceptor::from(Arc::new(config));
+            Some(acceptor)
+        } else {
+            None
+        };
+
         let addr = format!("0.0.0.0:{}", self.ctx.port);
         let listener = TcpListener::bind(&addr).await?;
         println!("Listening for control and proxy connections on {}", addr);
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
-            let stream = MyTcpStream::from(stream);
-            tokio::spawn(serve(TunnelHandler::new(self.ctx.clone()), stream, notify_shutdown.subscribe()));
+            let acceptor = acceptor.clone();
+            let ctx = self.ctx.clone();
+            let shutdown = notify_shutdown.subscribe();
+            tokio::spawn(async move {
+                let stream = if let Some(acceptor) = acceptor {
+                    let stream = acceptor.accept(stream).await.unwrap();
+                    MyTcpStream::from(stream)
+                } else {
+                    MyTcpStream::from(stream)
+                };
+                serve(TunnelHandler::new(ctx), stream, shutdown).await;
+            });
         }
 
         Ok(())

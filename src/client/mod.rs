@@ -5,7 +5,13 @@ use control::ControlConnect;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::io::{split, ReadHalf, WriteHalf};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
 use tokio::time;
+use tokio_native_tls::native_tls::TlsConnector;
+use tokio_native_tls::TlsStream;
+use tokio_util::either::Either;
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +23,7 @@ pub struct Config {
     pub so_timeout: Option<u64>,
     pub ping_time: Option<u64>,
     pub auth_token: String,
+    pub use_ssl: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -43,6 +50,62 @@ pub struct Context {
     pub so_timeout: u64,
     pub ping_time: u64,
     pub auth_token: String,
+    pub use_ssl: bool,
+}
+
+type TcpReader = Either<OwnedReadHalf, ReadHalf<TlsStream<TcpStream>>>;
+type TcpWriter = Either<OwnedWriteHalf, WriteHalf<TlsStream<TcpStream>>>;
+
+struct MyTcpStream {
+    inner: Either<TcpStream, TlsStream<TcpStream>>,
+}
+
+impl MyTcpStream {
+    pub async fn connect(server_host: &str, server_port: u16, use_ssl: bool) -> anyhow::Result<MyTcpStream> {
+        let addr = format!("{}:{}", server_host, server_port);
+        let stream = TcpStream::connect(addr).await?;
+        if use_ssl {
+            let cx = TlsConnector::builder()
+                .danger_accept_invalid_certs(true)
+                .danger_accept_invalid_hostnames(true)
+                .use_sni(false)
+                .build()?;
+            let cx = tokio_native_tls::TlsConnector::from(cx);
+            let stream = cx.connect(server_host, stream).await?;
+            Ok(MyTcpStream::from(stream))
+        } else {
+            Ok(MyTcpStream::from(stream))
+        }
+    }
+
+    pub fn into_split(self) -> (TcpReader, TcpWriter) {
+        match self.inner {
+            Either::Left(stream) => {
+                let (reader, writer) = stream.into_split();
+                (TcpReader::Left(reader), TcpWriter::Left(writer))
+            }
+            Either::Right(stream) => {
+                let (reader, writer) = split(stream);
+                (TcpReader::Right(reader), TcpWriter::Right(writer))
+            }
+        }
+    }
+}
+
+impl From<TcpStream> for MyTcpStream {
+    fn from(stream: TcpStream) -> Self {
+        Self {
+            inner: Either::Left(stream),
+        }
+    }
+}
+
+impl From<TlsStream<TcpStream>> for MyTcpStream {
+    fn from(stream: TlsStream<TcpStream>) -> Self {
+        Self {
+            inner: Either::Right(stream),
+        }
+    }
 }
 
 pub struct Client {
@@ -58,6 +121,7 @@ impl Client {
             auth_token: cfg.auth_token,
             so_timeout: cfg.so_timeout.unwrap_or(28800),
             ping_time: cfg.ping_time.unwrap_or(10),
+            use_ssl: cfg.use_ssl.unwrap_or(false),
             tunnel_map: Mutex::new(HashMap::new()),
         });
         Self { ctx }

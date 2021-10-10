@@ -31,6 +31,7 @@ pub struct Config {
     pub ssl_key: Option<String>,
     pub so_timeout: Option<u64>,
     pub ping_timeout: Option<u64>,
+    pub use_ssl: Option<bool>,
 }
 
 impl Default for Config {
@@ -44,6 +45,7 @@ impl Default for Config {
             ssl_key: None,
             so_timeout: None,
             ping_timeout: None,
+            use_ssl: None,
         }
     }
 }
@@ -131,6 +133,7 @@ pub struct Context {
     pub ssl_key: Option<String>,
     pub so_timeout: u64,
     pub ping_timeout: u64,
+    pub use_ssl: bool,
     pub client_map: RwLock<HashMap<String, Arc<Client>>>,
     pub tunnel_map: RwLock<HashMap<String, Arc<Client>>>,
 }
@@ -167,6 +170,7 @@ impl Server {
             ssl_key: cfg.ssl_key,
             so_timeout: cfg.so_timeout.unwrap_or(28800),
             ping_timeout: cfg.ping_timeout.unwrap_or(120),
+            use_ssl: cfg.use_ssl.unwrap_or(false),
             client_map: RwLock::new(HashMap::new()),
             tunnel_map: RwLock::new(HashMap::new()),
         });
@@ -176,12 +180,12 @@ impl Server {
     pub async fn run(&self) {
         if let Some(port) = self.ctx.http_port {
             let http_listener = HttpListener::new(self.ctx.clone());
-            tokio::spawn(async move { http_listener.run(port).await });
+            tokio::spawn(async move { http_listener.run(port).await.unwrap() });
         }
 
         if let Some(port) = self.ctx.https_port {
             let https_listener = HttpsListener::new(self.ctx.clone());
-            tokio::spawn(async move { https_listener.run(port).await });
+            tokio::spawn(async move { https_listener.run(port).await.unwrap() });
         }
 
         let tunnel_listener = TunnelListener::new(self.ctx.clone());

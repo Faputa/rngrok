@@ -21,9 +21,9 @@ impl HttpListener {
         Self { ctx }
     }
 
-    pub async fn run(&self, port: u16) {
+    pub async fn run(&self, port: u16) -> anyhow::Result<()> {
         let addr = format!("0.0.0.0:{}", port);
-        let listener = TcpListener::bind(&addr).await.unwrap();
+        let listener = TcpListener::bind(&addr).await?;
         println!("Listening for public http connections on {}", addr);
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
@@ -31,6 +31,8 @@ impl HttpListener {
             let stream = MyTcpStream::from(stream);
             tokio::spawn(serve(HttpHandler::new(self.ctx.clone(), "http"), stream, notify_shutdown.subscribe()));
         }
+
+        Ok(())
     }
 }
 
@@ -43,11 +45,11 @@ impl HttpsListener {
         Self { ctx }
     }
 
-    pub async fn run(&self, port: u16) {
-        let config = self.ctx.ssl_config().unwrap();
+    pub async fn run(&self, port: u16) -> anyhow::Result<()> {
+        let config = self.ctx.ssl_config()?;
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let addr = format!("0.0.0.0:{}", port);
-        let listener = TcpListener::bind(&addr).await.unwrap();
+        let listener = TcpListener::bind(&addr).await?;
         println!("Listening for public https connections on {}", addr);
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
@@ -61,6 +63,8 @@ impl HttpsListener {
                 serve(HttpHandler::new(ctx, "https"), stream, shutdown).await;
             });
         }
+
+        Ok(())
     }
 }
 
