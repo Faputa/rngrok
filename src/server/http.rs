@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::BufMut;
@@ -28,8 +29,13 @@ impl HttpListener {
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
+            let peer_addr = stream.peer_addr().unwrap();
             let stream = MyTcpStream::from(stream);
-            tokio::spawn(serve(HttpHandler::new(self.ctx.clone(), "http"), stream, notify_shutdown.subscribe()));
+            tokio::spawn(serve(
+                HttpHandler::new(self.ctx.clone(), "http", peer_addr),
+                stream,
+                notify_shutdown.subscribe(),
+            ));
         }
 
         Ok(())
@@ -58,9 +64,10 @@ impl HttpsListener {
             let ctx = self.ctx.clone();
             let shutdown = notify_shutdown.subscribe();
             tokio::spawn(async move {
+                let peer_addr = stream.peer_addr().unwrap();
                 let stream = acceptor.accept(stream).await.unwrap();
                 let stream = MyTcpStream::from(stream);
-                serve(HttpHandler::new(ctx, "https"), stream, shutdown).await;
+                serve(HttpHandler::new(ctx, "https", peer_addr), stream, shutdown).await;
             });
         }
 
@@ -82,11 +89,16 @@ async fn serve(http_handler: HttpHandler<'_>, stream: MyTcpStream, mut shutdown:
 struct HttpHandler<'a> {
     ctx: Arc<Context>,
     protocol: &'a str,
+    peer_addr: SocketAddr,
 }
 
 impl<'a> HttpHandler<'a> {
-    fn new(ctx: Arc<Context>, protocol: &'a str) -> Self {
-        Self { ctx, protocol }
+    fn new(ctx: Arc<Context>, protocol: &'a str, peer_addr: SocketAddr) -> Self {
+        Self {
+            ctx,
+            protocol,
+            peer_addr,
+        }
     }
 
     async fn run(&self, stream: MyTcpStream) -> anyhow::Result<()> {
@@ -101,7 +113,7 @@ impl<'a> HttpHandler<'a> {
 
             let url = format!("{}://{}", self.protocol, head.get("host").unwrap());
             let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
-            let request = Request::new(url.clone(), proxy_writer_sender, writer);
+            let request = Request::new(url.clone(), proxy_writer_sender, writer, self.peer_addr);
 
             let client = unwrap_or!(self.ctx.tunnel_map.read().unwrap().get(&url), return Ok(())).clone();
             client.request_sender.send(request).await?;

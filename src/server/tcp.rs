@@ -60,10 +60,11 @@ impl TcpHandler {
     }
 
     async fn run(&self, stream: TcpStream) -> anyhow::Result<()> {
+        let peer_addr = stream.peer_addr()?;
         let (mut reader, writer) = stream.into_split();
         let (proxy_writer_sender, mut proxy_writer_receiver) = mpsc::channel(1);
 
-        let request = Request::new(self.url.clone(), proxy_writer_sender, TcpWriter::Left(writer));
+        let request = Request::new(self.url.clone(), proxy_writer_sender, TcpWriter::Left(writer), peer_addr);
 
         let client = unwrap_or!(self.ctx.tunnel_map.read().unwrap().get(&self.url), return Ok(())).clone();
         client.request_sender.send(request).await?;

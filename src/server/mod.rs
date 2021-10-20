@@ -5,6 +5,7 @@ mod tunnel;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
+use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
@@ -92,15 +93,22 @@ impl From<TlsStream<TcpStream>> for MyTcpStream {
 pub struct Request {
     pub url: String,
     pub proxy_writer_sender: mpsc::Sender<TcpWriter>,
-    pub request_writer: TcpWriter,
+    pub public_writer: TcpWriter,
+    pub public_addr: SocketAddr,
 }
 
 impl Request {
-    pub fn new(url: String, proxy_writer_sender: mpsc::Sender<TcpWriter>, request_writer: TcpWriter) -> Self {
+    pub fn new(
+        url: String,
+        proxy_writer_sender: mpsc::Sender<TcpWriter>,
+        public_writer: TcpWriter,
+        public_addr: SocketAddr,
+    ) -> Self {
         Self {
             url,
             proxy_writer_sender,
-            request_writer,
+            public_writer,
+            public_addr,
         }
     }
 }

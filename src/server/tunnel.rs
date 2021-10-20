@@ -147,12 +147,12 @@ impl TunnelHandler {
             }
         };
 
-        send_pack(&mut writer, start_proxy(request.url)).await?;
+        send_pack(&mut writer, start_proxy(request.url, request.public_addr.to_string())).await?;
         request.proxy_writer_sender.send(writer).await?;
         send_pack(&mut *client.writer.lock().await, req_proxy()).await?;
 
-        forward(self.ctx.so_timeout, &mut reader, &mut request.request_writer).await?;
-        request.request_writer.shutdown().await?;
+        forward(self.ctx.so_timeout, &mut reader, &mut request.public_writer).await?;
+        request.public_writer.shutdown().await?;
 
         Ok(())
     }
@@ -247,12 +247,8 @@ fn req_proxy() -> String {
     serde_json::to_string(&Envelope::from(ReqProxy {})).unwrap()
 }
 
-fn start_proxy(url: String) -> String {
-    serde_json::to_string(&Envelope::from(StartProxy {
-        url,
-        client_addr: "".to_string(),
-    }))
-    .unwrap()
+fn start_proxy(url: String, client_addr: String) -> String {
+    serde_json::to_string(&Envelope::from(StartProxy { url, client_addr })).unwrap()
 }
 
 fn new_tunnel(req_id: String, url: String, protocol: String) -> String {
