@@ -115,8 +115,16 @@ impl TunnelHandler {
 
             match Message::from_str(&json)? {
                 Message::ReqTunnel(req_tunnel) => {
-                    self.register_tunnel(client.clone(), req_tunnel, notify_shutdown.subscribe())
-                        .await?
+                    match self
+                        .register_tunnel(client.clone(), req_tunnel, notify_shutdown.subscribe())
+                        .await
+                    {
+                        Ok(msg) => send_pack(&mut *client.writer.lock().await, msg).await?,
+                        Err(e) => {
+                            send_pack(&mut *client.writer.lock().await, err_tunnel(e.to_string())).await?;
+                            return Err(e);
+                        }
+                    }
                 }
                 Message::Ping(_) => send_pack(&mut *client.writer.lock().await, pong()).await?,
                 _ => {}
@@ -162,7 +170,7 @@ impl TunnelHandler {
         client: Arc<Client>,
         req_tunnel: ReqTunnel,
         shutdown: broadcast::Receiver<()>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<String> {
         match req_tunnel.protocol.as_str() {
             protocol @ "tcp" => {
                 let port = req_tunnel.remote_port.unwrap();
@@ -170,19 +178,15 @@ impl TunnelHandler {
                 let listener = match TcpListener::bind(&addr).await {
                     Ok(t) => t,
                     Err(e) => {
-                        println!("Error binding TCP listener: {}", e);
-                        return Ok(());
+                        return Err(anyhow::anyhow!("Error binding TCP listener: {}", e));
                     }
                 };
 
                 let url = format!("tcp://{}:{}", self.ctx.domain, port);
 
                 tokio::spawn(listen_tcp(MyTcpListener::new(listener, self.ctx.clone(), url.clone()), shutdown));
-
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
-
-                send_pack(&mut *client.writer.lock().await, new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
-                    .await
+                Ok(new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
             }
 
             protocol @ ("http" | "https") => {
@@ -195,12 +199,10 @@ impl TunnelHandler {
                 };
 
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
-
-                send_pack(&mut *client.writer.lock().await, new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
-                    .await
+                Ok(new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
             }
 
-            _ => Ok(()),
+            _ => Err(anyhow::anyhow!("Protocol {} is not supported", req_tunnel.protocol)),
         }
     }
 }
@@ -238,7 +240,7 @@ fn auth_resp(client_id: String) -> String {
         version: Some("2".to_string()),
         mm_version: Some("1.7".to_string()),
         client_id: Some(client_id),
-        error: None,
+        ..Default::default()
     }))
     .unwrap()
 }
@@ -256,7 +258,15 @@ fn new_tunnel(req_id: String, url: String, protocol: String) -> String {
         req_id: Some(req_id),
         url: Some(url),
         protocol: Some(protocol),
-        error: None,
+        ..Default::default()
+    }))
+    .unwrap()
+}
+
+fn err_tunnel(error: String) -> String {
+    serde_json::to_string(&Envelope::from(NewTunnel {
+        error: Some(error),
+        ..Default::default()
     }))
     .unwrap()
 }
