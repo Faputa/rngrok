@@ -116,10 +116,13 @@ impl TunnelHandler {
             match Message::from_str(&json)? {
                 Message::ReqTunnel(req_tunnel) => {
                     match self
-                        .register_tunnel(client.clone(), req_tunnel, notify_shutdown.subscribe())
+                        .register_tunnel(client.clone(), &req_tunnel, notify_shutdown.subscribe())
                         .await
                     {
-                        Ok(msg) => send_pack(&mut *client.writer.lock().await, msg).await?,
+                        Ok(url) => {
+                            let msg = new_tunnel(req_tunnel.req_id, url, req_tunnel.protocol.to_string());
+                            send_pack(&mut *client.writer.lock().await, msg).await?
+                        }
                         Err(e) => {
                             send_pack(&mut *client.writer.lock().await, err_tunnel(e.to_string())).await?;
                             return Err(e);
@@ -168,11 +171,11 @@ impl TunnelHandler {
     async fn register_tunnel(
         &mut self,
         client: Arc<Client>,
-        req_tunnel: ReqTunnel,
+        req_tunnel: &ReqTunnel,
         shutdown: broadcast::Receiver<()>,
     ) -> anyhow::Result<String> {
         match req_tunnel.protocol.as_str() {
-            protocol @ "tcp" => {
+            "tcp" => {
                 let port = req_tunnel.remote_port.unwrap();
                 let addr = format!("0.0.0.0:{}", port);
                 let listener = match TcpListener::bind(&addr).await {
@@ -186,20 +189,20 @@ impl TunnelHandler {
 
                 tokio::spawn(listen_tcp(MyTcpListener::new(listener, self.ctx.clone(), url.clone()), shutdown));
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
-                Ok(new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
+                Ok(url)
             }
 
             protocol @ ("http" | "https") => {
-                let url = if let Some(hostname) = req_tunnel.hostname {
+                let url = if let Some(hostname) = &req_tunnel.hostname {
                     format!("{}://{}", protocol, hostname)
-                } else if let Some(subdomain) = req_tunnel.subdomain {
+                } else if let Some(subdomain) = &req_tunnel.subdomain {
                     format!("{}://{}.{}", protocol, subdomain, self.ctx.domain)
                 } else {
                     format!("{}://{}.{}", protocol, rand_id(6), self.ctx.domain)
                 };
 
                 self.ctx.tunnel_map.write().unwrap().insert(url.clone(), client.clone());
-                Ok(new_tunnel(req_tunnel.req_id, url, protocol.to_string()))
+                Ok(url)
             }
 
             _ => Err(anyhow::anyhow!("Protocol {} is not supported", req_tunnel.protocol)),
