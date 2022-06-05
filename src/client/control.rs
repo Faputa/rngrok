@@ -28,18 +28,18 @@ impl ControlConnect {
 
         send_pack(&mut writer, auth(self.ctx.auth_token.clone())).await?;
         let json = unwrap_or!(timeout(self.ctx.so_timeout, reader.read()).await??, return Ok(()));
-        println!("{}", json);
+        log::info!("{}", json);
 
         let msg = serde_json::from_str::<Envelope>(&json)?;
         let auth_resp = serde_json::from_value::<AuthResp>(msg.payload)?;
 
         if let Some(err) = auth_resp.error {
-            println!("Failed to authenticate to server: {}", &err);
+            log::warn!("Failed to authenticate to server: {}", &err);
             return Ok(());
         }
 
         let id = auth_resp.client_id.unwrap();
-        println!("Authenticated with server, client id: {}", &id);
+        log::info!("Authenticated with server, client id: {}", &id);
 
         let mut req_id_to_tunnel_config = HashMap::<String, &TunnelConfig>::new();
         for tunnel in &self.ctx.tunnel_list {
@@ -58,12 +58,12 @@ impl ControlConnect {
                     continue;
                 }
             };
-            println!("{}", json);
+            log::info!("{}", json);
 
             match Message::from_str(&json)? {
                 Message::NewTunnel(new_tunnel) => {
                     if let Some(err) = new_tunnel.error {
-                        println!("Server failed to allocate tunnel: {}", &err);
+                        log::warn!("Server failed to allocate tunnel: {}", &err);
                         return Ok(());
                     }
                     let &tunnel = unwrap_or!(req_id_to_tunnel_config.get(&new_tunnel.req_id.unwrap()), return Ok(()));
@@ -75,7 +75,7 @@ impl ControlConnect {
                             local_addr: format!("{}:{}", tunnel.local_host, tunnel.local_port),
                         }),
                     );
-                    println!("Tunnel established at {}", new_tunnel.url.unwrap());
+                    log::info!("Tunnel established at {}", new_tunnel.url.unwrap());
                 }
                 Message::ReqProxy(_) => {
                     tokio::spawn(connect_proxy(
@@ -94,7 +94,7 @@ async fn connect_proxy(proxy_connect: ProxyConnect, mut shutdown: broadcast::Rec
     tokio::select! {
         res = proxy_connect.run() => {
             if let Err(e) = res {
-                println!("{:?}", e);
+                log::error!("{:?}", e);
             }
         }
         _ = shutdown.recv() => {}

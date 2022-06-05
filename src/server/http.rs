@@ -25,7 +25,7 @@ impl HttpListener {
     pub async fn run(&self, port: u16) -> anyhow::Result<()> {
         let addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&addr).await?;
-        println!("Listening for public http connections on {}", addr);
+        log::info!("Listening for public http connections on {}", addr);
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
@@ -56,7 +56,7 @@ impl HttpsListener {
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let addr = format!("0.0.0.0:{}", port);
         let listener = TcpListener::bind(&addr).await?;
-        println!("Listening for public https connections on {}", addr);
+        log::info!("Listening for public https connections on {}", addr);
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
@@ -79,7 +79,7 @@ async fn serve(http_handler: HttpHandler<'_>, stream: MyTcpStream, mut shutdown:
     tokio::select! {
         res = http_handler.run(stream) => {
             if let Err(e) = res {
-                println!("{}", e);
+                log::error!("{}", e);
             }
         }
         _ = shutdown.recv() => {}

@@ -27,31 +27,31 @@ impl ProxyConnect {
         let stream = match MyTcpStream::connect(&self.ctx.server_host, self.ctx.server_port, self.ctx.use_ssl).await {
             Ok(t) => t,
             Err(e) => {
-                println!("Failed to establish proxy connection: {}", e);
+                log::error!("Failed to establish proxy connection: {}", e);
                 return Ok(());
             }
         };
         let (mut reader, mut writer) = stream.into_split();
 
         if let Err(e) = send_pack(&mut writer, reg_proxy(self.id.clone())).await {
-            println!("Failed to write RegProxy: {}", e);
+            log::error!("Failed to write RegProxy: {}", e);
         }
 
         let mut packet_reader = PacketReader::new(&mut reader);
         let json = unwrap_or!(timeout(self.ctx.so_timeout, packet_reader.read()).await??, return Ok(()));
-        println!("{}", json);
+        log::info!("{}", json);
 
         let msg = serde_json::from_str::<Envelope>(&json)?;
         let start_proxy = match serde_json::from_value::<StartProxy>(msg.payload) {
             Ok(m) => m,
             Err(e) => {
-                println!("Server failed to write StartProxy: {}", e);
+                log::error!("Server failed to write StartProxy: {}", e);
                 return Ok(());
             }
         };
 
         let tunnel = unwrap_or!(self.ctx.tunnel_map.lock().unwrap().get(&start_proxy.url), {
-            println!("Couldn't find tunnel for proxy: {}", start_proxy.url);
+            log::warn!("Couldn't find tunnel for proxy: {}", start_proxy.url);
             return Ok(());
         })
         .clone();
@@ -59,7 +59,7 @@ impl ProxyConnect {
         let local_stream = match TcpStream::connect(&tunnel.local_addr).await {
             Ok(local_stream) => local_stream,
             Err(e) => {
-                println!("Failed to open private leg {}: {}", tunnel.local_addr, &e);
+                log::error!("Failed to open private leg {}: {}", tunnel.local_addr, &e);
                 if tunnel.protocol.starts_with("http") {
                     send_buf(&mut writer, bad_gateway(&tunnel).as_bytes()).await?;
                     writer.shutdown().await?;
@@ -84,7 +84,7 @@ async fn run_local(mut local_connect: LocalConnect, mut shutdown: broadcast::Rec
     tokio::select! {
         res = local_connect.run() => {
             if let Err(e) = res {
-                println!("{}", e);
+                log::error!("{}", e);
             }
         }
         _ = shutdown.recv() => {}

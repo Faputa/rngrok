@@ -6,6 +6,7 @@ const DEFAULT_FILENAME: &str = "server.yml";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let cfg = match env::args().nth(1) {
         Some(filename) => {
             let s = fs::read_to_string(&filename)
@@ -19,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
             Err(_) => Default::default(),
         },
     };
-    println!("{:?}", cfg);
+    log::info!("{:?}", cfg);
 
     let server = Server::new(cfg);
     server.run().await;

@@ -34,7 +34,7 @@ impl TunnelListener {
 
         let addr = format!("0.0.0.0:{}", self.ctx.port);
         let listener = TcpListener::bind(&addr).await?;
-        println!("Listening for control and proxy connections on {}", addr);
+        log::info!("Listening for control and proxy connections on {}", addr);
 
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         while let Ok((stream, _)) = listener.accept().await {
@@ -60,7 +60,7 @@ async fn serve(mut tunnel_handler: TunnelHandler, stream: MyTcpStream, mut shutd
     tokio::select! {
         res = tunnel_handler.run(stream) => {
             if let Err(e) = res {
-                println!("{}", e);
+                log::error!("{}", e);
             }
         }
         _ = shutdown.recv() => {}
@@ -82,12 +82,12 @@ impl TunnelHandler {
         let mut packet_reader = PacketReader::new(&mut reader);
 
         let json = unwrap_or!(timeout(self.ctx.so_timeout, packet_reader.read()).await??, return Ok(()));
-        println!("{}", json);
+        log::info!("{}", json);
 
         let msg = match Message::from_str(&json) {
             Ok(m) => m,
             Err(e) => {
-                println!("Failed to read message: {}", e);
+                log::error!("Failed to read message: {}", e);
                 return Ok(());
             }
         };
@@ -111,7 +111,7 @@ impl TunnelHandler {
         let (notify_shutdown, _) = broadcast::channel::<()>(1);
         loop {
             let json = unwrap_or!(timeout(self.ctx.ping_timeout, reader.read()).await??, return Ok(()));
-            println!("{}", json);
+            log::info!("{}", json);
 
             match Message::from_str(&json)? {
                 Message::ReqTunnel(req_tunnel) => {
@@ -143,7 +143,7 @@ impl TunnelHandler {
     ) -> anyhow::Result<()> {
         let id = reg_proxy.client_id;
         let client = unwrap_or!(self.ctx.client_map.read().unwrap().get(&id), {
-            println!("No client found for identifier: {}", id);
+            log::warn!("No client found for identifier: {}", id);
             return Ok(());
         })
         .clone();

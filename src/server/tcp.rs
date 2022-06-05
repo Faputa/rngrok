@@ -42,7 +42,7 @@ async fn serve(tcp_handler: TcpHandler, stream: TcpStream, mut shutdown: broadca
     tokio::select! {
         res = tcp_handler.run(stream) => {
             if let Err(e) = res {
-                println!("{}", e);
+                log::error!("{}", e);
             }
         }
         _ = shutdown.recv() => {}

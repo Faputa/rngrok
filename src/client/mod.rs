@@ -130,7 +130,7 @@ impl Client {
     pub async fn run(&self) {
         let control_connect = ControlConnect::new(self.ctx.clone());
         while let Err(e) = control_connect.run().await {
-            println!("{}", e);
+            log::error!("{}", e);
             time::sleep(Duration::from_millis(1000)).await;
         }
     }

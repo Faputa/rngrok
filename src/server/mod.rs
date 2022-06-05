@@ -198,7 +198,7 @@ impl Server {
 
         let tunnel_listener = TunnelListener::new(self.ctx.clone());
         if let Err(e) = tunnel_listener.run().await {
-            println!("tunnelListener failed with error {}", e);
+            log::error!("tunnelListener failed with error {}", e);
         }
     }
 }

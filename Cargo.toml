@@ -25,3 +25,5 @@ tokio-native-tls = "0.3.0"
 tokio-util = { version="0.6.7", features=["codec"] }
 bytes = "1.0.1"
 rand = "0.8.3"
+log = "0.4.17"
+env_logger = "0.9.0"
